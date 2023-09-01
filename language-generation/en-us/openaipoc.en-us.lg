@@ -14,7 +14,7 @@
 ]
 
 # SendActivity_ElBrU1_text()
-- ${first(jPath(turn.results,"$.content.choices[0].message.content"))}
+- [chatGPT] ${first(jPath(turn.results,"$.content.choices[0].message.content"))}
 
 # SendActivity_Secret()
 [Activity
