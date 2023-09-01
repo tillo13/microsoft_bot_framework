@@ -1,0 +1,153 @@
+{
+  "$kind": "Microsoft.AdaptiveDialog",
+  "$designer": {
+    "name": "openaipoc",
+    "description": "",
+    "id": "A79tBe"
+  },
+  "autoEndDialog": true,
+  "defaultResultProperty": "dialog.result",
+  "triggers": [
+    {
+      "$kind": "Microsoft.OnConversationUpdateActivity",
+      "$designer": {
+        "id": "376720",
+        "comment": "This trigger runs when a conversation update activity is sent to the bot. This indicates a user or bot being added or removed from a conversation."
+      },
+      "actions": [
+        {
+          "$kind": "Microsoft.Foreach",
+          "$designer": {
+            "id": "518944",
+            "name": "Loop: for each item",
+            "comment": "For each member added to the conversation."
+          },
+          "itemsProperty": "turn.Activity.membersAdded",
+          "actions": [
+            {
+              "$kind": "Microsoft.IfCondition",
+              "$designer": {
+                "id": "641773",
+                "name": "Branch: if/else",
+                "comment": "Checks that that member added ID does not match the bot ID. This prevents the greeting message from being sent when the bot is added to a conversation."
+              },
+              "condition": "=string(dialog.foreach.value.id) != string(turn.Activity.Recipient.id)",
+              "actions": [
+                {
+                  "$kind": "Microsoft.SendActivity",
+                  "$designer": {
+                    "id": "859266",
+                    "name": "Send a response"
+                  },
+                  "activity": "${SendActivity_Greeting()}"
+                }
+              ]
+            }
+          ],
+          "value": "dialog.foreach.value"
+        }
+      ]
+    },
+    {
+  "$kind": "Microsoft.OnMessageActivity",
+  "$designer": {
+    "id": "j29372a",
+    "name": "Message trigger for commands"
+  },
+  "condition": "=startsWith(turn.Activity.Text, '$')",
+  "actions": [
+    {
+      "$kind": "Microsoft.SwitchCondition",
+      "$designer": {
+        "id": "switch123",
+        "name": "Switch for commands"
+      },
+      "condition": "=trim(substring(turn.Activity.Text, 1))",
+      "cases": [
+        {
+          "value": "secret",
+          "actions": [
+            {
+              "$kind": "Microsoft.SendActivity",
+              "$designer": {
+                "id": "yx764e",
+                "name": "Send a response"
+              },
+              "activity": "${SendActivity_Secret()}"
+            }
+          ]
+        },
+        {
+          "value": "marco",
+          "actions": [
+            {
+              "$kind": "Microsoft.SendActivity",
+              "$designer": {
+                "id": "yx944e",
+                "name": "Send a response"
+              },
+              "activity": "${SendActivity_Marco()}"
+            }
+          ]
+        }
+      ],
+      "default": [
+        {
+          "$kind": "Microsoft.SendActivity",
+          "$designer": {
+            "id": "yx833q",
+            "name": "Send a response"
+          },
+          "activity": "${SendActivity_UnknownCommand()}"
+        }
+      ]
+    }
+  ]
+},
+    {
+      "$kind": "Microsoft.OnUnknownIntent",
+      "$designer": {
+        "id": "mb2n1u",
+        "comment": "This trigger fires when an incoming activity is not handled by any other trigger."
+      },
+      "actions": [
+        {
+          "$kind": "Microsoft.HttpRequest",
+          "$designer": {
+            "id": "KXxrGs",
+            "comment": "Send user input to Azure OpenAI endpoint"
+          },
+          "resultProperty": "turn.results",
+          "method": "POST",
+          "url": "=settings.OPENAI_API_BASE_URL + '/' + settings.OPENAI_API_DEPLOYMENT + '?api-version=' + settings.OPENAI_API_VERSION",
+          "body": {
+            "messages": [
+              {
+                "role": "system",
+                "content": "helpful assistant"
+              },
+              {
+                "role": "user",
+                "content": "${turn.activity.text}"
+              }
+            ]
+          },
+          "headers": {
+            "api-key": "=settings.OPENAI_API_KEY"
+          },
+          "responseType": "json"
+        },
+        {
+          "$kind": "Microsoft.SendActivity",
+          "$designer": {
+            "id": "ElBrU1"
+          },
+          "activity": "${SendActivity_ElBrU1()}"
+        }
+      ]
+    }
+  ],
+  "generator": "openaipoc.lg",
+  "id": "openaipoc",
+  "recognizer": "openaipoc.lu.qna"
+}
