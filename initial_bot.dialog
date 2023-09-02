@@ -34,6 +34,14 @@
               "condition": "=string(dialog.foreach.value.id) != string(turn.Activity.Recipient.id)",
               "actions": [
                 {
+                  "$kind": "Microsoft.SetProperty",
+                  "$designer": {
+                    "id": "3mL2Zc"
+                  },
+                  "property": "user.isNew",
+                  "value": true
+                },
+                {
                   "$kind": "Microsoft.SendActivity",
                   "$designer": {
                     "id": "859266",
@@ -49,61 +57,61 @@
       ]
     },
     {
-  "$kind": "Microsoft.OnMessageActivity",
-  "$designer": {
-    "id": "j29372a",
-    "name": "Message trigger for commands"
-  },
-  "condition": "=startsWith(turn.Activity.Text, '$')",
-  "actions": [
-    {
-      "$kind": "Microsoft.SwitchCondition",
+      "$kind": "Microsoft.OnMessageActivity",
       "$designer": {
-        "id": "switch123",
-        "name": "Switch for commands"
+        "id": "j29372a",
+        "name": "Message trigger for commands"
       },
-      "condition": "=trim(substring(turn.Activity.Text, 1))",
-      "cases": [
+      "condition": "=startsWith(turn.Activity.Text, '$')",
+      "actions": [
         {
-          "value": "secret",
-          "actions": [
-            {
-              "$kind": "Microsoft.SendActivity",
-              "$designer": {
-                "id": "yx764e",
-                "name": "Send a response"
-              },
-              "activity": "${SendActivity_Secret()}"
-            }
-          ]
-        },
-        {
-          "value": "marco",
-          "actions": [
-            {
-              "$kind": "Microsoft.SendActivity",
-              "$designer": {
-                "id": "yx944e",
-                "name": "Send a response"
-              },
-              "activity": "${SendActivity_Marco()}"
-            }
-          ]
-        }
-      ],
-      "default": [
-        {
-          "$kind": "Microsoft.SendActivity",
+          "$kind": "Microsoft.SwitchCondition",
           "$designer": {
-            "id": "yx833q",
-            "name": "Send a response"
+            "id": "switch123",
+            "name": "Switch for commands"
           },
-          "activity": "${SendActivity_UnknownCommand()}"
+          "condition": "=trim(substring(turn.Activity.Text, 1))",
+          "cases": [
+            {
+              "value": "secret",
+              "actions": [
+                {
+                  "$kind": "Microsoft.SendActivity",
+                  "$designer": {
+                    "id": "yx764e",
+                    "name": "Send a response"
+                  },
+                  "activity": "${SendActivity_Secret()}"
+                }
+              ]
+            },
+            {
+              "value": "marco",
+              "actions": [
+                {
+                  "$kind": "Microsoft.SendActivity",
+                  "$designer": {
+                    "id": "yx944e",
+                    "name": "Send a response"
+                  },
+                  "activity": "${SendActivity_Marco()}"
+                }
+              ]
+            }
+          ],
+          "default": [
+            {
+              "$kind": "Microsoft.SendActivity",
+              "$designer": {
+                "id": "yx833q",
+                "name": "Send a response"
+              },
+              "activity": "${SendActivity_UnknownCommand()}"
+            }
+          ]
         }
       ]
-    }
-  ]
-},
+    },
     {
       "$kind": "Microsoft.OnUnknownIntent",
       "$designer": {
@@ -111,6 +119,72 @@
         "comment": "This trigger fires when an incoming activity is not handled by any other trigger."
       },
       "actions": [
+        {
+          "$kind": "Microsoft.SetProperty",
+          "$designer": {
+            "id": "RrmGGJ"
+          },
+          "property": "user.data",
+          "value": [
+            {
+              "role": "user",
+              "content": "Hello"
+            }
+          ]
+        },
+        {
+          "$kind": "Microsoft.IfCondition",
+          "$designer": {
+            "id": "FUCDpa"
+          },
+          "condition": "=turn.activity.text == \"new\" || user.isNew",
+          "actions": [
+            {
+              "$kind": "Microsoft.SetProperty",
+              "$designer": {
+                "id": "um2TVI"
+              },
+              "property": "user.isNew",
+              "value": false
+            },
+            {
+              "$kind": "Microsoft.SetProperty",
+              "$designer": {
+                "id": "ObMuYq"
+              },
+              "property": "user.inputData",
+              "value": [
+                {
+                  "role": "user",
+                  "content": "${turn.activity.text}"
+                }
+              ]
+            }
+          ],
+          "elseActions": [
+            {
+              "$kind": "Microsoft.SetProperty",
+              "$designer": {
+                "id": "K1OgeX"
+              },
+              "property": "turn.newInput",
+              "value": [
+                {
+                  "role": "user",
+                  "content": "${turn.activity.text}"
+                }
+              ]
+            },
+            {
+              "$kind": "Microsoft.SetProperty",
+              "$designer": {
+                "id": "onFGGe"
+              },
+              "property": "user.inputData",
+              "value": "=union(user.inputData,turn.newInput)"
+            }
+          ]
+        },
         {
           "$kind": "Microsoft.HttpRequest",
           "$designer": {
@@ -121,21 +195,13 @@
           "method": "POST",
           "url": "=settings.OPENAI_API_BASE_URL + '/' + settings.OPENAI_API_DEPLOYMENT + '?api-version=' + settings.OPENAI_API_VERSION",
           "body": {
-            "messages": [
-              {
-                "role": "system",
-                "content": "helpful assistant"
-              },
-              {
-                "role": "user",
-                "content": "${turn.activity.text}"
-              }
-            ]
+            "messages": "=user.inputData"
           },
           "headers": {
             "api-key": "=settings.OPENAI_API_KEY"
           },
-          "responseType": "json"
+          "responseType": "json",
+          "contentType": "application/json"
         },
         {
           "$kind": "Microsoft.SendActivity",
@@ -143,11 +209,32 @@
             "id": "ElBrU1"
           },
           "activity": "${SendActivity_ElBrU1()}"
+        },
+        {
+          "$kind": "Microsoft.SetProperty",
+          "$designer": {
+            "id": "Qct06m"
+          },
+"property": "turn.outputData",
+"value": [
+  {
+    "role": "assistant",
+    "content": "=turn.results.content.choices[0].message.content"
+  }
+]
+        },
+        {
+          "$kind": "Microsoft.SetProperty",
+          "$designer": {
+            "id": "y5uhMx"
+          },
+          "property": "user.inputData",
+          "value": "=union(user.inputData,turn.outputData)"
         }
       ]
     }
   ],
   "generator": "openaipoc.lg",
   "id": "openaipoc",
-  "recognizer": "openaipoc.lu.qna"
+  "recognizer": "initial_bot.lu.qna"
 }

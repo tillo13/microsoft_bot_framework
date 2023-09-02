@@ -13,4 +13,3 @@ const { start } = require('botbuilder-dialogs-adaptive-runtime-integration-expre
     process.exit(1);
   }
 })();
-
