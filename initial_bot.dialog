@@ -56,62 +56,92 @@
         }
       ]
     },
+{
+  "$kind": "Microsoft.OnMessageActivity",
+  "$designer": {
+    "id": "j29372a",
+    "name": "Message trigger for commands"
+  },
+  "condition": "=startsWith(turn.Activity.Text, '$')",
+  "actions": [
     {
-      "$kind": "Microsoft.OnMessageActivity",
+      "$kind": "Microsoft.SwitchCondition",
       "$designer": {
-        "id": "j29372a",
-        "name": "Message trigger for commands"
+        "id": "switch123",
+        "name": "Switch for commands"
       },
-      "condition": "=startsWith(turn.Activity.Text, '$')",
-      "actions": [
+      "condition": "=trim(substring(turn.Activity.Text, 1))",
+      "cases": [
         {
-          "$kind": "Microsoft.SwitchCondition",
-          "$designer": {
-            "id": "switch123",
-            "name": "Switch for commands"
-          },
-          "condition": "=trim(substring(turn.Activity.Text, 1))",
-          "cases": [
-            {
-              "value": "secret",
-              "actions": [
-                {
-                  "$kind": "Microsoft.SendActivity",
-                  "$designer": {
-                    "id": "yx764e",
-                    "name": "Send a response"
-                  },
-                  "activity": "${SendActivity_Secret()}"
-                }
-              ]
-            },
-            {
-              "value": "marco",
-              "actions": [
-                {
-                  "$kind": "Microsoft.SendActivity",
-                  "$designer": {
-                    "id": "yx944e",
-                    "name": "Send a response"
-                  },
-                  "activity": "${SendActivity_Marco()}"
-                }
-              ]
-            }
-          ],
-          "default": [
+          "value": "secret",
+          "actions": [
             {
               "$kind": "Microsoft.SendActivity",
               "$designer": {
-                "id": "yx833q",
+                "id": "yx764e",
                 "name": "Send a response"
               },
-              "activity": "${SendActivity_UnknownCommand()}"
+              "activity": "${SendActivity_Secret()}"
             }
           ]
+        },
+        {
+          "value": "marco",
+          "actions": [
+            {
+              "$kind": "Microsoft.SendActivity",
+              "$designer": {
+                "id": "yx944e",
+                "name": "Send a response"
+              },
+              "activity": "${SendActivity_Marco()}"
+            }
+          ]
+        },
+{
+  "value": "new",
+  "actions": [
+    {
+      "$kind": "Microsoft.DeleteProperties",
+      "$designer": {
+        "id": "dp12345",
+        "name": "Delete Properties"
+      },
+      "properties": ["user.inputData"]
+    },
+    {
+      "$kind": "Microsoft.SetProperty",
+      "$designer": {
+        "id": "sp12345",
+        "name": "Set Empty Array"
+      },
+      "property": "user.inputData",
+      "value": []
+    },
+    {
+      "$kind": "Microsoft.SendActivity",
+      "$designer": {
+        "id": "yx764e",
+        "name": "Send a response"
+      },
+      "activity": "You have invoked the reset!  Your bot has a fresh new memory!  Start again!"
+    }
+  ]
+}
+      ],
+      "default": [
+        {
+          "$kind": "Microsoft.SendActivity",
+          "$designer": {
+            "id": "yx833q",
+            "name": "Send a response"
+          },
+          "activity": "${SendActivity_UnknownCommand()}"
         }
       ]
-    },
+    }
+  ]
+},
     {
       "$kind": "Microsoft.OnUnknownIntent",
       "$designer": {
@@ -132,59 +162,59 @@
             }
           ]
         },
+    {
+  "$kind": "Microsoft.IfCondition",
+  "$designer": {
+    "id": "FUCDpa"
+  },
+  "condition": "=user.isNew",
+  "actions": [
+    {
+      "$kind": "Microsoft.SetProperty",
+      "$designer": {
+        "id": "um2TVI"
+      },
+      "property": "user.isNew",
+      "value": false
+    },
+    {
+      "$kind": "Microsoft.SetProperty",
+      "$designer": {
+        "id": "ObMuYq"
+      },
+      "property": "user.inputData",
+      "value": [
         {
-          "$kind": "Microsoft.IfCondition",
-          "$designer": {
-            "id": "FUCDpa"
-          },
-          "condition": "=turn.activity.text == \"new\" || user.isNew",
-          "actions": [
-            {
-              "$kind": "Microsoft.SetProperty",
-              "$designer": {
-                "id": "um2TVI"
-              },
-              "property": "user.isNew",
-              "value": false
-            },
-            {
-              "$kind": "Microsoft.SetProperty",
-              "$designer": {
-                "id": "ObMuYq"
-              },
-              "property": "user.inputData",
-              "value": [
-                {
-                  "role": "user",
-                  "content": "${turn.activity.text}"
-                }
-              ]
-            }
-          ],
-          "elseActions": [
-            {
-              "$kind": "Microsoft.SetProperty",
-              "$designer": {
-                "id": "K1OgeX"
-              },
-              "property": "turn.newInput",
-              "value": [
-                {
-                  "role": "user",
-                  "content": "${turn.activity.text}"
-                }
-              ]
-            },
-            {
-              "$kind": "Microsoft.SetProperty",
-              "$designer": {
-                "id": "onFGGe"
-              },
-              "property": "user.inputData",
-              "value": "=union(user.inputData,turn.newInput)"
-            }
-          ]
-        },
+          "role": "user",
+          "content": "${turn.activity.text}"
+        }
+      ]
+    }
+  ],
+  "elseActions": [
+    {
+      "$kind": "Microsoft.SetProperty",
+      "$designer": {
+        "id": "K1OgeX"
+      },
+      "property": "turn.newInput",
+      "value": [
+        {
+          "role": "user",
+          "content": "${turn.activity.text}"
+        }
+      ]
+    },
+    {
+      "$kind": "Microsoft.SetProperty",
+      "$designer": {
+        "id": "onFGGe"
+      },
+      "property": "user.inputData",
+      "value": "=union(user.inputData,turn.newInput)"
+    }
+  ]
+},
         {
           "$kind": "Microsoft.HttpRequest",
           "$designer": {
