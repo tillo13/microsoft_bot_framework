@@ -87,3 +87,22 @@ Here are some screenshots demonstrating how to interact with the bot and how the
 
 3. **Bot New Memory Invocation:** This shows an example of how to invoke a new bot memory, effectively reseting the bots existing memory and starting from a clean slate. In this example, when asked about my dog Toby, it does not have any knowledge of this due to the reset and responds accordingly.
    ![Bot New Memory](./SCREENSHOTS/bot_new_memory.png)
+
+   ## TODO:
+
+2023Sept3: 
+1. Have an issue where asynchronous functions aren't properly awaited during local testing of the Slack functionality, causing a "`RuntimeWarning: coroutine was never awaited`". While Flask, the current web server framework used, doesn't support native async operations, we are planning to deploy this bot's codebase onto an environment like Microsoft Azure that supports async operations natively.
+
+Therefore, the action item moving forward is to transition this codebase to Azure or a similar environment that better supports the asynchronous nature of the bot logic. Once we transition to an environment compatible with async, we expect the "coroutine was never awaited" RuntimeWarnings to be resolved when the bot is run locally.
+
+This transition will involve adapting the bot's on_turn methods to be compatible with the new environment's native asyncio library and correctly handling all async function calls and task executions according to that environment's specification.
+
+Considering this, we maintain that all async function calls should be correctly awaited and scheduled in the new Azure environment, as to adhere to best practices for async programming and to eliminate the possibility of running into the same warning in different environments.
+
+2. **Upgrade to Supported Bot Framework:** The Python SDK for Microsoft Bot Framework is being phased out, meaning it may not be a sustainable option for long-term support or development. Consider migrating to a supported framework such as Power Virtual Agents or Microsoft Bot Framework Composer, which interfaces with the Bot Framework SDK in .NET.
+
+3. **Deployment to Azure Bot Service (ABS):** The bot application must be deployable to the Azure Bot Service. The ABS supports bot hosting and integration with channels like Slack. Make sure to follow Azure's guidelines when preparing for deployment.
+
+4. **Keep Technologies Updated:** Make sure all tools, including Microsoft Bot Framework Composer, are kept up-to-date to ensure compatibility, incorporate new features, and maintain security.
+
+5. **Complex Bot Development:** For more complex dialog management, evaluate the utility of the Dialogs Library from Bot Framework SDK v4 for programmatic dialog control.
