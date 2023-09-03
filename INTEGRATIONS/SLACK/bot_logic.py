@@ -22,7 +22,7 @@ class Bot:
         headers = {
             'api-key': os.getenv('OPENAI_API_KEY')
         }
-        
+
         data = {
             "messages": [{
                 "role": "system",
@@ -32,17 +32,26 @@ class Bot:
                 "content": activity.text
             }]
         }
-        
+
         url = f'{os.getenv("OPENAI_API_BASE_URL")}/{os.getenv("OPENAI_API_DEPLOYMENT")}?api-version={os.getenv("OPENAI_API_VERSION")}'
-        
+
         response = requests.post(url, headers=headers, json=data)
-        
+
         if response.status_code == 200:
             result = response.json()
             print(result)  # print to see the structure
+            message_content = result['choices'][0]['message']['content']
+            details = "-----\nDetails: \n"
+            
+            for k, v in result.items():
+                if k != 'choices':
+                    if isinstance(v, dict):
+                        for nested_k, nested_v in v.items():
+                            details += f"{nested_k}: {nested_v}\n"
+                    else:
+                        details += f"{k}: {v}\n"
 
-            return result['choices'][0]['message']['content']
+            return message_content + '\n' + details
 
-        
         else:
             return 'An error occurred while communicating with the bot.'
