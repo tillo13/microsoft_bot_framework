@@ -10,7 +10,8 @@ class Bot:
 
     def on_turn(self, context: TurnContext):
         self.record_sessions(context.activity)
-        context.activity.text = self.talk_to_chatbot(context.activity)
+        context.activity.text, context.activity.details = self.talk_to_chatbot(context.activity)
+
 
     def record_sessions(self, activity: Activity):
         conv_id = activity.conversation.id
@@ -41,7 +42,7 @@ class Bot:
             result = response.json()
             print(result)  # print to see the structure
             message_content = result['choices'][0]['message']['content']
-            details = "-----\nDetails: \n"
+            details = "OpenAI response details:\n____\n"
             
             for k, v in result.items():
                 if k != 'choices':
@@ -51,7 +52,7 @@ class Bot:
                     else:
                         details += f"{k}: {v}\n"
 
-            return message_content + '\n' + details
+            return message_content, details
 
         else:
-            return 'An error occurred while communicating with the bot.'
+            return 'An error occurred while communicating with the bot.', ''   # now it's returning a tuple even in case of error

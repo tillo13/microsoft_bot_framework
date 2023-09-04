@@ -33,8 +33,7 @@ def slack_events():
         if event["ts"] == last_bot_message_ts:
             return make_response("Ignore bot's own message", 200)
 
-        if ("<@U02GD132UPJ>" in event["text"] or "@bot" in event["text"]):
-
+        if ("<@U02GD132UPJ>" in event["text"].lower() or "@bot" in event["text"].lower()):
             channel_id = event['channel']
             thread_ts = event['ts']
 
@@ -49,13 +48,42 @@ def slack_events():
 
             bot_adapter.process_activity(message_activity)
 
-            output = Thread(target=send_message, args=(event["channel"],event["ts"],message_activity.text))
+            output = Thread(target=send_message, args=(event["channel"], event["ts"], message_activity.text, message_activity.details))
             output.start()
     return make_response("", 200)
 
-def send_message(channel, thread_ts, text):
+def send_message(channel, thread_ts, bot_message, response_json):
     global last_bot_message_ts
-    response = client.chat_postMessage(channel=channel, thread_ts=thread_ts, text=text)
+
+    # Format response
+    formatted_response_str = json.dumps(response_json, indent=2)
+
+    # First define your message_block
+    message_block = [
+        {
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": bot_message
+            }
+        },
+        {
+            "type": "divider"
+        },
+        {
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": f"```{response_json}```",                
+            }
+        }
+    ]
+
+    # Now, send the client.chat_postMessage containing your message_block
+    response = client.chat_postMessage(channel=channel, thread_ts=thread_ts,
+                                       text="An important message", blocks=message_block)
+
+    # Keep track of the last message's ts
     last_bot_message_ts = response['ts']
 
 if __name__ == "__main__":
