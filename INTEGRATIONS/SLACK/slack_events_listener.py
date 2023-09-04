@@ -33,6 +33,9 @@ def get_thread_starter_user_id(channel, thread_ts):
         
     return starter_user_id
 
+# initialize empty lists in the global scope
+bot_replied_to_messages_ts = []
+
 @app.route('/slack/events', methods=['POST'])
 def slack_events():
     data = request.get_json()
@@ -47,15 +50,18 @@ def slack_events():
         thread_ts = event.get('thread_ts')
         if thread_ts and event['user'] != bot_user_id:  # Check user is not the bot
             conversation = client.conversations_replies(channel=event['channel'], ts=thread_ts)
-            if any(message['user'] == bot_user_id for message in conversation['messages']):
+            # Check that the last message in the thread is from a user
+            if conversation['messages'][-1]['user'] == event['user']:
                 print("THREADED CHATGPT MESSAGE, INVOKING BOT.")
                 process_activity(event)
+            else:
+                print("Last message in thread is not from a user.")
         else:
             if ("<@U02GD132UPJ>" in event["text"].lower() or "@bot" in event["text"].lower()):
                 print("USER INVOKED BOT, REPLYING TO USER VIA CHATGPT.")
                 process_activity(event)
             else:
-                print("USER INTERACTED, BUT DID NOT CALL BOT.")
+                print("USER USED SLACK, BUT DID NOT CALL BOT.")
     return make_response("", 200)
 
 def process_activity(event):
@@ -72,7 +78,6 @@ def process_activity(event):
     message_activity = Activity().deserialize(activity)
     bot_adapter.process_activity(message_activity)
 
-    # unpack the dictionary to pass the values as arguments
     output = Thread(target=send_message, args=(event["channel"], event["ts"], 
                                         message_activity.bot_responses['message_content'],
                                         message_activity.bot_responses['details'],
