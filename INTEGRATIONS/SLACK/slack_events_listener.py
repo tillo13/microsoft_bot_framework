@@ -23,14 +23,15 @@ bot_adapter = Adapter(Bot())
 @app.route('/slack/events', methods=['POST'])
 def slack_events():
     data = request.get_json()
+
     if "challenge" in data:
         return make_response(data["challenge"], 200, {"content_type":"application/json"})
-
+    
     if "event" in data:
         event = data["event"]
 
-        # Add this line to ignore message if it matches the last bot message
-        if event["ts"] == last_bot_message_ts:
+        # Skip bot's own messages
+        if 'subtype' in event and event['subtype'] == 'bot_message':
             return make_response("Ignore bot's own message", 200)
 
         if ("<@U02GD132UPJ>" in event["text"].lower() or "@bot" in event["text"].lower()):
@@ -48,11 +49,16 @@ def slack_events():
 
             bot_adapter.process_activity(message_activity)
 
-            output = Thread(target=send_message, args=(event["channel"], event["ts"], message_activity.text, message_activity.details))
+            # unpack the dictionary to pass the values as arguments
+            output = Thread(target=send_message, args=(event["channel"], event["ts"], 
+                                                    message_activity.bot_responses['message_content'],
+                                                    message_activity.bot_responses['details'],
+                                                    message_activity.bot_responses['entire_json_payload']
+                                          ))
             output.start()
     return make_response("", 200)
 
-def send_message(channel, thread_ts, bot_message, response_json):
+def send_message(channel, thread_ts, bot_message, response_json, entire_json_payload):
     global last_bot_message_ts
 
     # Format response
@@ -60,28 +66,35 @@ def send_message(channel, thread_ts, bot_message, response_json):
 
     # First define your message_block
     message_block = [
-        {
-            "type": "section",
-            "text": {
-                "type": "mrkdwn",
-                "text": bot_message
+            {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": bot_message
+                }
+            },
+            {
+                "type": "divider"
+            },
+            {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": f"```{response_json}```",                
+                }
+            },
+            {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": f"```{entire_json_payload}```",                
+                }
             }
-        },
-        {
-            "type": "divider"
-        },
-        {
-            "type": "section",
-            "text": {
-                "type": "mrkdwn",
-                "text": f"```{response_json}```",                
-            }
-        }
-    ]
+        ]
 
     # Now, send the client.chat_postMessage containing your message_block
     response = client.chat_postMessage(channel=channel, thread_ts=thread_ts,
-                                       text="An important message", blocks=message_block)
+                                       text="A placeholder message will go here.  If this is sent Slack should respond with something like test123.", blocks=message_block)
 
     # Keep track of the last message's ts
     last_bot_message_ts = response['ts']

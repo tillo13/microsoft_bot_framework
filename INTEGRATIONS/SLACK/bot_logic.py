@@ -10,8 +10,7 @@ class Bot:
 
     def on_turn(self, context: TurnContext):
         self.record_sessions(context.activity)
-        context.activity.text, context.activity.details = self.talk_to_chatbot(context.activity)
-
+        context.activity.bot_responses = self.talk_to_chatbot(context.activity)
 
     def record_sessions(self, activity: Activity):
         conv_id = activity.conversation.id
@@ -52,7 +51,9 @@ class Bot:
                     else:
                         details += f"{k}: {v}\n"
 
-            return message_content, details
+            entire_json_payload = f"Entire current JSON payload:\n____\n{json.dumps(result, indent=2)}"  # Add this line
+
+            return {"message_content": message_content, "details": details, "entire_json_payload": entire_json_payload}
 
         else:
-            return 'An error occurred while communicating with the bot.', ''   # now it's returning a tuple even in case of error
+            return {"message_content": 'An error occurred while communicating with the bot.', "details": '', "entire_json_payload": ''} 
