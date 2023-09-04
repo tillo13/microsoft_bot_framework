@@ -12,55 +12,75 @@ from threading import Thread
 # load environment variables from .env file
 load_dotenv('../../.env')
 
-#set this to check to not double post
-last_bot_message_ts = None
+VERBOSE_MODE = False  # Set to True for verbose output to slack showing json
 
 app = Flask(__name__)
 slack_token = os.getenv('SLACK_BOT_TOKEN')
 client = WebClient(token=slack_token)
 bot_adapter = Adapter(Bot())
 
+bot_user_id = client.auth_test()["user_id"]
+#this is to tell a comparision if the bot has replied to an initial request
+bot_initiated_threads = []
+
+def get_thread_starter_user_id(channel, thread_ts):
+    response = client.conversations_replies(channel=channel, ts=thread_ts)
+    starter_message = response['messages'][0]
+    starter_user_id = starter_message['user']
+
+    if starter_user_id == bot_user_id and thread_ts not in bot_initiated_threads:
+        bot_initiated_threads.append(thread_ts)
+        
+    return starter_user_id
+
 @app.route('/slack/events', methods=['POST'])
 def slack_events():
     data = request.get_json()
-
     if "challenge" in data:
         return make_response(data["challenge"], 200, {"content_type":"application/json"})
-    
     if "event" in data:
         event = data["event"]
-
-        # Skip bot's own messages
         if 'subtype' in event and event['subtype'] == 'bot_message':
             return make_response("Ignore bot's own message", 200)
-
-        if ("<@U02GD132UPJ>" in event["text"].lower() or "@bot" in event["text"].lower()):
-            channel_id = event['channel']
-            thread_ts = event['ts']
-
-            activity = {
-                "type": "message",
-                "text": event["text"],
-                "channelId": "slack",
-                "conversation": {"id": channel_id,},
-                "from": {"id": event.get("user_id")},
-            }
-            message_activity = Activity().deserialize(activity)
-
-            bot_adapter.process_activity(message_activity)
-
-            # unpack the dictionary to pass the values as arguments
-            output = Thread(target=send_message, args=(event["channel"], event["ts"], 
-                                                    message_activity.bot_responses['message_content'],
-                                                    message_activity.bot_responses['details'],
-                                                    message_activity.bot_responses['entire_json_payload']
-                                          ))
-            output.start()
+        if event['user'] == bot_user_id:  # Ignore events from the bot itself
+            return make_response("", 200)
+        thread_ts = event.get('thread_ts')
+        if thread_ts and event['user'] != bot_user_id:  # Check user is not the bot
+            conversation = client.conversations_replies(channel=event['channel'], ts=thread_ts)
+            if any(message['user'] == bot_user_id for message in conversation['messages']):
+                print("THREADED CHATGPT MESSAGE, INVOKING BOT.")
+                process_activity(event)
+        else:
+            if ("<@U02GD132UPJ>" in event["text"].lower() or "@bot" in event["text"].lower()):
+                print("USER INVOKED BOT, REPLYING TO USER VIA CHATGPT.")
+                process_activity(event)
+            else:
+                print("USER INTERACTED, BUT DID NOT CALL BOT.")
     return make_response("", 200)
 
-def send_message(channel, thread_ts, bot_message, response_json, entire_json_payload):
-    global last_bot_message_ts
+def process_activity(event):
+    channel_id = event['channel']
+    thread_ts = event.get('thread_ts')
 
+    activity = {
+        "type": "message",
+        "text": event["text"],
+        "channelId": "slack",
+        "conversation": {"id": channel_id,},
+        "from": {"id": event.get("user_id")},
+    }
+    message_activity = Activity().deserialize(activity)
+    bot_adapter.process_activity(message_activity)
+
+    # unpack the dictionary to pass the values as arguments
+    output = Thread(target=send_message, args=(event["channel"], event["ts"], 
+                                        message_activity.bot_responses['message_content'],
+                                        message_activity.bot_responses['details'],
+                                        message_activity.bot_responses['entire_json_payload']
+                                        ))
+    output.start()
+
+def send_message(channel, thread_ts, bot_message, response_json, entire_json_payload):
     # Format response
     formatted_response_str = json.dumps(response_json, indent=2)
 
@@ -72,7 +92,11 @@ def send_message(channel, thread_ts, bot_message, response_json, entire_json_pay
                     "type": "mrkdwn",
                     "text": bot_message
                 }
-            },
+            }
+    ]
+
+    if VERBOSE_MODE:
+        message_block += [
             {
                 "type": "divider"
             },
@@ -80,7 +104,7 @@ def send_message(channel, thread_ts, bot_message, response_json, entire_json_pay
                 "type": "section",
                 "text": {
                     "type": "mrkdwn",
-                    "text": f"```{response_json}```",                
+                    "text": f"```{formatted_response_str}```",                
                 }
             },
             {
@@ -93,11 +117,8 @@ def send_message(channel, thread_ts, bot_message, response_json, entire_json_pay
         ]
 
     # Now, send the client.chat_postMessage containing your message_block
-    response = client.chat_postMessage(channel=channel, thread_ts=thread_ts,
-                                       text="A placeholder message will go here.  If this is sent Slack should respond with something like test123.", blocks=message_block)
-
-    # Keep track of the last message's ts
-    last_bot_message_ts = response['ts']
+    client.chat_postMessage(channel=channel, thread_ts=thread_ts,
+                            text="A placeholder message titled test123.", blocks=message_block)
 
 if __name__ == "__main__":
     app.run(port=int(os.getenv('PORT', 3000)))

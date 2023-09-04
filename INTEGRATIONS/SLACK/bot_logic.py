@@ -23,15 +23,15 @@ class Bot:
             'api-key': os.getenv('OPENAI_API_KEY')
         }
 
-        data = {
-            "messages": [{
-                "role": "system",
-                "content": "You are a helpful assistant."
-            }, {
-                "role": "user",
-                "content": activity.text
-            }]
-        }
+        conv_id = activity.conversation.id
+        session = self.sessions.get(conv_id, [])
+
+        # Prepare the messages for the API call
+        messages = [{'role': 'system', 'content': 'You are a helpful assistant.'}]
+        for message in session:
+            messages.append({'role': 'user', 'content': message})
+            
+        data = { "messages": messages }
 
         url = f'{os.getenv("OPENAI_API_BASE_URL")}/{os.getenv("OPENAI_API_DEPLOYMENT")}?api-version={os.getenv("OPENAI_API_VERSION")}'
 
