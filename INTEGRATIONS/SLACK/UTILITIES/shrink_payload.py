@@ -26,6 +26,7 @@ from threading import Thread
 from datetime import datetime
 
 
+
 # load environment variables from .env file
 load_dotenv('../../.env')
 
@@ -70,37 +71,30 @@ def message_from_blocks(event):
 @app.route('/slack/events', methods=['POST'])
 def slack_events():
     data = request.get_json()
+
     if "challenge" in data:
         return make_response(data["challenge"], 200, {"content_type": "application/json"})
-        
+
     if "event" in data:
         event = data["event"]
 
-        # Ignore bot's own message and events fired by the bot itself
-        if ("subtype" in event and event["subtype"] == "bot_message") or (event["user"] == bot_user_id):
+        # Ignore bot's own message
+        if event.get("subtype") == "bot_message" or event.get("bot_profile") is not None:
             return make_response("Ignore bot message", 200)
 
-        # Parse messages using blocks
         event_text_blocks = message_from_blocks(event).lower()
-
         thread_ts = event.get('thread_ts')
-        
-        # If a thread exists and the event is not from the bot itself, process the activity
-        if thread_ts and event['user'] != bot_user_id:  
+
+        if thread_ts and event['user'] != bot_user_id:
             print(f"THREADED CHATGPT MESSAGE, INVOKING {bot_user_id} BOT.")
             process_activity(event)
-
-        # If the bot was specifically mentioned
-        elif event.get('type') == 'app_mention':
-            print(f"USER INVOKED VIA APPBOT {bot_user_id}, REPLYING TO USER VIA CHATGPT.")
-            process_activity(event)
-        elif "@bot" in event_text_blocks:
-            print(f"USER INVOKED @BOT, REPLYING TO USER VIA CHATGPT.")
-            process_activity(event)
-
         else:
-            print("USER USED SLACK, BUT DID NOT CALL BOT.")
-                
+            if (event.get('type') == 'app_mention') or ("@bot" in event_text_blocks):
+                print(f"USER INVOKED BOT, REPLYING TO USER VIA CHATGPT.")
+                process_activity(event)
+            else:
+                print("USER USED SLACK, BUT DID NOT CALL BOT.")
+
     return make_response("", 200)
 
 def process_activity(event):
@@ -183,13 +177,15 @@ if __name__ == "__main__":
 
 
 
-
-
-bot_logic.py: from botbuilder.core import TurnContext
+bot_logic.py:
+from botbuilder.core import TurnContext
 from botbuilder.schema import Activity
 import requests
 import json
 import os
+from datetime import timezone
+import datetime
+
 
 class Bot:
     def __init__(self, client):
@@ -213,9 +209,17 @@ class Bot:
         if thread_ts is None:
             messages.append({'role': 'user', 'content': activity.text})
         else:
+            print(f"CURRENT THREAD_TS in def talk_to_chatbot: {thread_ts}")
+
+            # Convert thread_ts (standard format) back to Unix timestamp to pass to slack
+            unix_ts_of_current_thread = thread_ts.replace(tzinfo=timezone.utc).timestamp()
+            print(f"Converted thread_ts in Unix timestamp format: {unix_ts_of_current_thread}")
+
             response = self.client.conversations_replies(
                 channel=channel_id,
-                ts=thread_ts,
+                ts=str(unix_ts_of_current_thread),
+                #ts="1693869882.640909", #uncomment this to test as we know this payload works
+
                 limit=100 # Get the last 100 messages in the slack thread
             )
             print(f"Calling Slack conversations_replies API with channel_id: {channel_id}, thread_ts: {thread_ts}")
@@ -261,7 +265,8 @@ class Bot:
 
 
 
-    bot_adapter.py: from botbuilder.core import BotAdapter, TurnContext
+    bot_adapter.py: 
+    from botbuilder.core import BotAdapter, TurnContext
 
 class Adapter(BotAdapter):
     def __init__(self, bot):
