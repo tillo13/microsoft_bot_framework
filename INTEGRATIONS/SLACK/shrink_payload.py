@@ -1,3 +1,18 @@
+import re
+
+def remove_extra_spaces_comments(text):
+    lines = text.split('\n')
+    stripped = [line for line in lines if not line.strip().startswith('#')]
+    clean_text = ' '.join(stripped)
+    clean_text = re.sub('\s+', ' ', clean_text).strip()  
+    clean_text = re.sub('\"\"\"(.*?)\"\"\"', '', clean_text, flags=re.MULTILINE|re.DOTALL) # remove multi-line comments
+    clean_text = re.sub("'''(.*?)'''", '', clean_text, flags=re.MULTILINE|re.DOTALL) # remove multi-line comments
+    return clean_text
+code = """
+
+
+
+slack_events_listener.py
 from dotenv import load_dotenv
 from flask import Flask, request, make_response
 from slack_sdk import WebClient
@@ -9,7 +24,6 @@ from bot_adapter import Adapter
 from botbuilder.schema import Activity
 from threading import Thread
 from datetime import datetime
-
 
 
 # load environment variables from .env file
@@ -61,13 +75,17 @@ def slack_events():
         
     if "event" in data:
         event = data["event"]
+
+        # Ignore bot's own message and events fired by the bot itself
         if ("subtype" in event and event["subtype"] == "bot_message") or (event["user"] == bot_user_id):
             return make_response("Ignore bot message", 200)
-        event_text_blocks = message_from_blocks(event).lower()
-        
-        thread_ts = event.get('thread_ts')
-        print(f"CURRENT THREAD_TS in slack_events: {thread_ts}")
 
+        # Parse messages using blocks
+        event_text_blocks = message_from_blocks(event).lower()
+
+        thread_ts = event.get('thread_ts')
+        
+        # If a thread exists and the event is not from the bot itself, process the activity
         if thread_ts and event['user'] != bot_user_id:  
             print(f"THREADED CHATGPT MESSAGE, INVOKING {bot_user_id} BOT.")
             process_activity(event)
@@ -158,3 +176,112 @@ def send_message(channel, thread_ts, bot_message, response_json, entire_json_pay
 
 if __name__ == "__main__":
     app.run(port=int(os.getenv('PORT', 3000)))
+
+
+
+
+
+
+
+
+
+bot_logic.py: from botbuilder.core import TurnContext
+from botbuilder.schema import Activity
+import requests
+import json
+import os
+
+class Bot:
+    def __init__(self, client):
+        self.client = client
+
+    def on_turn(self, context: TurnContext):
+        message_content, details, entire_json_payload = self.talk_to_chatbot(context.activity)
+        context.activity.text = message_content
+        context.activity.bot_responses = {"message_content": message_content, "details": details, "entire_json_payload": entire_json_payload}
+        return context.activity
+
+    def talk_to_chatbot(self, activity: Activity):
+        headers = { 'api-key': os.getenv('OPENAI_API_KEY') }
+        
+        channel_id = activity.conversation.id
+        thread_ts = activity.timestamp
+
+        messages = [{'role': 'system', 'content': 'You are a kind, attentive assistant who always looks at specific details from this exact thread conversation and provide accurate responses by referencing exact names, dates, times, and key information from those conversations if available first, prior to hallucinating any answers.'}]
+        
+        # Check if thread_ts is None
+        if thread_ts is None:
+            messages.append({'role': 'user', 'content': activity.text})
+        else:
+            response = self.client.conversations_replies(
+                channel=channel_id,
+                ts=thread_ts,
+                limit=100 # Get the last 100 messages in the slack thread
+            )
+            print(f"Calling Slack conversations_replies API with channel_id: {channel_id}, thread_ts: {thread_ts}")
+            print(f"RESPONSE FROM CONVERSATION ENDPOINT: {response}")
+
+            thread_history = response['messages']
+            for message in thread_history:
+                if message['type'] == 'message' and 'bot_id' not in message: # Exclude bot messages
+                    messages.append({'role': 'user', 'content': message['text']})
+            
+        data = { "messages": messages }
+
+        url = f'{os.getenv("OPENAI_API_BASE_URL")}/{os.getenv("OPENAI_API_DEPLOYMENT")}?api-version={os.getenv("OPENAI_API_VERSION")}'
+
+        #tell the terminal 
+        print("OPENAI PAYLOAD BEFORE SENDING:" + json.dumps(data, indent=2))
+        response = requests.post(url, headers=headers, json=data)
+
+        if response.status_code == 200:
+            result = response.json()
+            print(result)  # print to see the structure
+            message_content = result['choices'][0]['message']['content']
+            details = "OpenAI response details:"
+            
+            for k, v in result.items():
+                if k != 'choices':
+                    if isinstance(v, dict):
+                        for nested_k, nested_v in v.items():
+                            details += f"{nested_k}: {nested_v}"
+                    else:
+                        details += f"{k}: {v}"
+
+            entire_json_payload = f"Entire current JSON payload:{json.dumps(result, indent=2)}"  
+
+            return message_content, details, entire_json_payload
+
+
+        else:
+            return {"message_content": 'An error occurred while communicating with the bot.', "details": '', "entire_json_payload": ''} 
+
+
+
+
+
+
+    bot_adapter.py: from botbuilder.core import BotAdapter, TurnContext
+
+class Adapter(BotAdapter):
+    def __init__(self, bot):
+        self.bot = bot
+
+    def send_activities(self, context: TurnContext, activities):
+        return [0] * len(activities)
+
+    def update_activity(self, context, activity):
+        pass
+
+    def delete_activity(self, context, reference):
+        pass
+
+    def process_activity(self, activity):
+        turn_context = TurnContext(self, activity)
+        return self.run_pipeline(self.bot.on_turn(turn_context))
+
+        
+        
+        """
+clean_code = remove_extra_spaces_comments(code)
+print(clean_code)

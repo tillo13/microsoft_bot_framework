@@ -15,4 +15,4 @@ class Adapter(BotAdapter):
 
     def process_activity(self, activity):
         turn_context = TurnContext(self, activity)
-        self.run_pipeline(self.bot.on_turn(turn_context))
+        return self.run_pipeline(self.bot.on_turn(turn_context))
