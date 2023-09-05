@@ -5,7 +5,7 @@ import json
 import os
 from datetime import timezone
 import datetime
-
+from UTILITIES.slack_to_chatgpt_payload_parser import slack_to_chatgpt_parser
 
 class Bot:
     def __init__(self, client):
@@ -18,64 +18,62 @@ class Bot:
         return context.activity
 
     def talk_to_chatbot(self, activity: Activity):
-        headers = { 'api-key': os.getenv('OPENAI_API_KEY') }
-        
-        channel_id = activity.conversation.id
-        thread_ts = activity.timestamp
-
-        messages = [{'role': 'system', 'content': 'You are a kind, attentive assistant who always looks at specific details from this exact thread conversation and provide accurate responses by referencing exact names, dates, times, and key information from those conversations if available first, prior to hallucinating any answers.'}]
-        
-        # Check if thread_ts is None
-        if thread_ts is None:
-            messages.append({'role': 'user', 'content': activity.text})
-        else:
-            print(f"CURRENT THREAD_TS in def talk_to_chatbot: {thread_ts}")
-
-            # Convert thread_ts (standard format) back to Unix timestamp to pass to slack
-            unix_ts_of_current_thread = thread_ts.replace(tzinfo=timezone.utc).timestamp()
-            print(f"Converted thread_ts in Unix timestamp format: {unix_ts_of_current_thread}")
-
-            response = self.client.conversations_replies(
-                channel=channel_id,
-                ts=str(unix_ts_of_current_thread),
-                #ts="1693869882.640909", #uncomment this to test as we know this payload works
-
-                limit=100 # Get the last 100 messages in the slack thread
-            )
-            print(f"Calling Slack conversations_replies API with channel_id: {channel_id}, thread_ts: {thread_ts}")
-            print(f"RESPONSE FROM CONVERSATION ENDPOINT: {response}")
-
-            thread_history = response['messages']
-            for message in thread_history:
-                if message['type'] == 'message' and 'bot_id' not in message: # Exclude bot messages
-                    messages.append({'role': 'user', 'content': message['text']})
+            headers = { 'api-key': os.getenv('OPENAI_API_KEY') }
             
-        data = { "messages": messages }
-
-        url = f'{os.getenv("OPENAI_API_BASE_URL")}/{os.getenv("OPENAI_API_DEPLOYMENT")}?api-version={os.getenv("OPENAI_API_VERSION")}'
-
-        #tell the terminal 
-        print("OPENAI PAYLOAD BEFORE SENDING:" + json.dumps(data, indent=2))
-        response = requests.post(url, headers=headers, json=data)
-
-        if response.status_code == 200:
-            result = response.json()
-            print(result)  # print to see the structure
-            message_content = result['choices'][0]['message']['content']
-            details = "OpenAI response details:"
+            channel_id = activity.conversation.id
+            thread_ts = activity.timestamp
             
-            for k, v in result.items():
-                if k != 'choices':
-                    if isinstance(v, dict):
-                        for nested_k, nested_v in v.items():
-                            details += f"{nested_k}: {nested_v}"
-                    else:
-                        details += f"{k}: {v}"
+            # If 'thread_ts' is not None, then it's a threaded message and we fetch the conversation history. 
+            # If it is None, then the 'initial_message' will contain only one message which was directed at the bot.
+            if thread_ts is not None:
+                print(f"CURRENT THREAD_TS in def talk_to_chatbot: {thread_ts}")
 
-            entire_json_payload = f"Entire current JSON payload:{json.dumps(result, indent=2)}"  
+                unix_ts_of_current_thread = thread_ts.replace(tzinfo=timezone.utc).timestamp()
+                print(f"Converted thread_ts in Unix timestamp format: {unix_ts_of_current_thread}")
 
-            return message_content, details, entire_json_payload
+                response = self.client.conversations_replies(  
+                    channel=channel_id, 
+                    ts=str(unix_ts_of_current_thread), 
+                    limit=100 
+                )
 
+                print(f"Calling Slack conversations_replies API with channel_id: {channel_id}, thread_ts: {thread_ts}")
+                print(f"RESPONSE FROM CONVERSATION ENDPOINT: {response}")
 
-        else:
-            return {"message_content": 'An error occurred while communicating with the bot.', "details": '', "entire_json_payload": ''} 
+                # Below is the conversation history
+                thread_history = response['messages']  
+
+                initial_message = slack_to_chatgpt_parser(thread_history)
+            else:
+                # If there's no thread history (i.e., when 'thread_ts' is None), 
+                # then the list 'initial_message' will contain only the one new message from the current user interaction.
+                initial_message = [{'role': 'user', 'content': activity.text}]
+
+            data = { "messages": initial_message }
+
+            url = f'{os.getenv("OPENAI_API_BASE_URL")}/{os.getenv("OPENAI_API_DEPLOYMENT")}?api-version={os.getenv("OPENAI_API_VERSION")}'
+
+            #tell the terminal 
+            print("OPENAI PAYLOAD BEFORE SENDING:" + json.dumps(data, indent=2))
+            response = requests.post(url, headers=headers, json=data)
+
+            if response.status_code == 200:
+                result = response.json()
+                print(result)  # print to see the structure
+                message_content = result['choices'][0]['message']['content']
+                details = "OpenAI response details:"
+                
+                for k, v in result.items():
+                    if k != 'choices':
+                        if isinstance(v, dict):
+                            for nested_k, nested_v in v.items():
+                                details += f"{nested_k}: {nested_v}"
+                        else:
+                            details += f"{k}: {v}"
+
+                entire_json_payload = f"Entire current JSON payload:{json.dumps(result, indent=2)}"  
+
+                return message_content, details, entire_json_payload
+
+            else:
+                return {"message_content": 'An error occurred while communicating with the bot.', "details": '', "entire_json_payload": ''}
