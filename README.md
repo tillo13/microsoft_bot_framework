@@ -21,6 +21,11 @@ Secure your bot by obscuring sensitive data that's crucial for connecting to the
 
 Dive deep into the complexities of extending the bot's capabilities. Explore how the usage of memory properties allows greater functionality in your bot and how HTTP requests make the bot smarter and more dynamic. Find the intricate details right here in **[3GIVE_BOT_MEMORY.md](https://github.com/tillo13/microsoft_bot_framework/blob/main/DETAILS/3GIVE_BOT_MEMORY.md)**.
 
+
+##Detailed Implementation
+
+For a deep dive into the bot's enhanced asynchronous capability for local testing and the transition to an environment like Microsoft Azure, refer to the following guide: **[5_LOCAL_NGROK_TESTING_WITH_SLACK.md](https://github.com/tillo13/microsoft_bot_framework/blob/main/DETAILS/5_LOCAL_NGROK_TESTING_WITH_SLACK.md)**. The guide offers an in-depth look into the ability to handle complex bot logic, effectively manage async function calls and task executions. It illustrates the adaptability of the bot's on_turn methods to the environment's native asyncio library.
+
 ## Deployment
 
 There are two primary options for deploying your bot: locally, using the Bot Framework Emulator, or cloud-based using Azure services. Each option offers its unique advantages catered to different needs and situations. 
@@ -29,7 +34,7 @@ There are two primary options for deploying your bot: locally, using the Bot Fra
 
 The Bot Framework Emulator is a client for testing and debugging bots locally. It provides the ability to test the bot's conversational capabilities immediately without the need to configure and use the Azure Bot Service. Not only does this allow you to rigorously test and make live changes to your bot before deploying, but it also gives you complete control over your bot's environment. 
 
-The instructions for setting up and running your bot locally using the Bot Framework Emulator can be found in the **[1LOCAL_SETUP.md](https://github.com/tillo13/microsoft_bot_framework/blob/main/DETAILS/1LOCAL_SETUP.md)** document.
+The instructions for setting up and running your bot locally using the Bot Framework Emulator can be found in the **[1LOCAL_SETUP.md](https://github.com/tillo13/microsoft_bot_framework/blob/main/DETAILS/1LOCAL_SETUP.md)** document then before proceeding to deployment, make sure to finalize your local Ngrok testing with Slack by following the detailed guide here: **[5_LOCAL_NGROK_TESTING_WITH_SLACK.md](https://github.com/tillo13/microsoft_bot_framework/blob/main/DETAILS/5_LOCAL_NGROK_TESTING_WITH_SLACK.md)**. Afterwards, you can target two primary options for deploying your bot...
 
 Benefits of Local Deployment:
 
@@ -62,7 +67,9 @@ This project is licensed under the MIT License.
 
 The bot can be versatile and flexible with multiple applications. It can be fine-tuned and extended to serve various applications with different platforms, even beyond chat systems. Below are some brainstorming ideas about how this bot could be extended to interface with other technical platforms:
 
-1. **Slack Integration**: Create a Slack bot that utilizes the bot to provide enhanced response in channels or direct messages.
+1. **Slack Integration**: Create a Slack bot that utilizes the bot to provide enhanced response in channels or direct messages. DONE 2023sept3!
+See **Slack Integration with Local Ngrok Testing:** The bot can be easily linked to a Slack App and be tested locally using Ngrok. This capability provides a wealth of opportunities for the bot to be used in a team's workflow by providing dynamic and context-aware responses to the users. Explore the detailed guide on how to leverage Ngrok for local testing with Slack in **[5_LOCAL_NGROK_TESTING_WITH_SLACK.md](https://github.com/tillo13/microsoft_bot_framework/blob/main/DETAILS/5_LOCAL_NGROK_TESTING_WITH_SLACK.md)**.
+
 2. **Microsoft Teams**: Deploy the bot on Teams to facilitate improved communication and instant support for organization-related queries.
 3. **Twilio SMS Assistant**: Couple the bot with Twilio and create an SMS assistant that can provide intelligent & contextually aware SMS responses.
 4. **Email Companion**: Integrate the bot with an email server to provide AI-powered email responses based on message history.
@@ -91,7 +98,7 @@ Here are some screenshots demonstrating how to interact with the bot and how the
    ## TODO:
 
 2023Sept3: 
-1. Have an issue where asynchronous functions aren't properly awaited during local testing of the Slack functionality, causing a "`RuntimeWarning: coroutine was never awaited`". While Flask, the current web server framework used, doesn't support native async operations, we are planning to deploy this bot's codebase onto an environment like Microsoft Azure that supports async operations natively.
+1. Have an issue where asynchronous functions aren't properly awaited during local testing of the Slack functionality, causing a "`RuntimeWarning: coroutine was never awaited`". While Flask, the current web server framework used, doesn't support native async operations, we are planning to deploy this bot's codebase onto an environment like Microsoft Azure that supports async operations natively. 
 
 Therefore, the action item moving forward is to transition this codebase to Azure or a similar environment that better supports the asynchronous nature of the bot logic. Once we transition to an environment compatible with async, we expect the "coroutine was never awaited" RuntimeWarnings to be resolved when the bot is run locally.
 
@@ -103,6 +110,4 @@ Considering this, we maintain that all async function calls should be correctly 
 
 3. **Deployment to Azure Bot Service (ABS):** The bot application must be deployable to the Azure Bot Service. The ABS supports bot hosting and integration with channels like Slack. Make sure to follow Azure's guidelines when preparing for deployment.
 
-4. **Keep Technologies Updated:** Make sure all tools, including Microsoft Bot Framework Composer, are kept up-to-date to ensure compatibility, incorporate new features, and maintain security.
-
-5. **Complex Bot Development:** For more complex dialog management, evaluate the utility of the Dialogs Library from Bot Framework SDK v4 for programmatic dialog control.
+4. **Complex Bot Development:** For more complex dialog management, evaluate the utility of the Dialogs Library from Bot Framework SDK v4 for programmatic dialog control.

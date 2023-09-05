@@ -10,8 +10,6 @@ from botbuilder.schema import Activity
 from threading import Thread
 from datetime import datetime
 
-
-
 # load environment variables from .env file
 load_dotenv('../../.env')
 
@@ -22,8 +20,8 @@ slack_token = os.getenv('SLACK_BOT_TOKEN')
 client = WebClient(token=slack_token)
 bot_adapter = Adapter(Bot(client))
 
+#set vars for things we could track to not duplicate later
 bot_user_id = client.auth_test()["user_id"]
-#this is to tell a comparision if the bot has replied to an initial request
 bot_initiated_threads = []
 
 def get_thread_starter_user_id(channel, thread_ts):
@@ -56,31 +54,26 @@ def message_from_blocks(event):
 @app.route('/slack/events', methods=['POST'])
 def slack_events():
     data = request.get_json()
-
     if "challenge" in data:
         return make_response(data["challenge"], 200, {"content_type": "application/json"})
-
     if "event" in data:
         event = data["event"]
-
-        # Ignore bot's own message
-        if event.get("subtype") == "bot_message" or event.get("bot_profile") is not None:
+        # Ignore bot's own messages
+        if event.get('subtype') == 'bot_message' or event.get('user') == bot_user_id:
             return make_response("Ignore bot message", 200)
-
         event_text_blocks = message_from_blocks(event).lower()
         thread_ts = event.get('thread_ts')
-
         if thread_ts and event['user'] != bot_user_id:
             print(f"THREADED CHATGPT MESSAGE, INVOKING {bot_user_id} BOT.")
-            process_activity(event)
+            Thread(target=process_activity, args=(event,)).start()  # start a new thread to process the activity
         else:
             if (event.get('type') == 'app_mention') or ("@bot" in event_text_blocks):
                 print(f"USER INVOKED BOT, REPLYING TO USER VIA CHATGPT.")
-                process_activity(event)
+                Thread(target=process_activity, args=(event,)).start()  # start a new thread to process the activity
             else:
                 print("USER USED SLACK, BUT DID NOT CALL BOT.")
-
-    return make_response("", 200)
+        print("SENDING SLACK AN HTTP200 SO WE CAN CONTINUE PROCESSING...")
+    return make_response("", 200)  # Respond immediately to Slack
 
 def process_activity(event):
     channel_id = event['channel']
