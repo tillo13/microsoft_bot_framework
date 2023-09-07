@@ -9,9 +9,12 @@ from bot_adapter import Adapter
 from botbuilder.schema import Activity
 from threading import Thread
 from datetime import datetime
+from dalle_utils import generate_image
+
 
 # load environment variables from .env file
 load_dotenv('../../.env')
+
 
 VERBOSE_MODE = False  # Set to True for verbose output to slack showing json
 
@@ -58,6 +61,9 @@ def slack_events():
         return make_response(data["challenge"], 200, {"content_type": "application/json"})
     if "event" in data:
         event = data["event"]
+        # Retrieve channel_id from the event data:
+        channel_id = event['channel']
+
         # Ignore bot's own messages
         if event.get('subtype') == 'bot_message' or event.get('user') == bot_user_id:
             return make_response("Ignore bot message", 200)
@@ -70,6 +76,12 @@ def slack_events():
             if (event.get('type') == 'app_mention') or ("@bot" in event_text_blocks):
                 print(f"USER INVOKED BOT, REPLYING TO USER VIA CHATGPT.")
                 Thread(target=process_activity, args=(event,)).start()  # start a new thread to process the activity
+
+            elif "$dalle" in event_text_blocks:
+                print(f"USER INVOKED DALLE, CREATING IMAGE.")
+                prompt = event_text_blocks.replace("$dalle", "").strip()  # get prompt from user's message
+                Thread(target=generate_image, args=(event, channel_id, prompt)).start()
+
             else:
                 print("USER USED SLACK, BUT DID NOT CALL BOT.")
         print("SENDING SLACK AN HTTP200 SO WE CAN CONTINUE PROCESSING...")
