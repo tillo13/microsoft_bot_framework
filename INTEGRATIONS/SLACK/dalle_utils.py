@@ -12,7 +12,7 @@ from io import BytesIO
 import time
 import sys
 import traceback
-
+import json
 
 # loading environment variables from .env file
 load_dotenv('../../.env')
@@ -46,6 +46,14 @@ def parse_dalle_command(command_text):
 def generate_image(event, channel_id, prompt, n_images, VERBOSE_MODE):
     print(f"COMMAND RECEIVED: Ask DALL-E for {n_images} images...")
     start_time = time.time() # records the start time
+
+    # Load the costs dictionary
+    with open('openai_costs_2023sept7.json') as f:
+        costs = json.load(f)
+
+        # Get the cost of DALL·E image models 1024x1024
+        DALL_E_COST_PER_IMAGE = costs["Other Models"]["Image Models"]["1024×1024"]
+        estimated_cost = format(DALL_E_COST_PER_IMAGE * n_images, '.4f')
 
     # Check if entered number was more than limit and send Slack message
     command_parts = event["text"].split(' ')
@@ -222,8 +230,7 @@ def generate_image(event, channel_id, prompt, n_images, VERBOSE_MODE):
                                     "elements": [
                                         {
                                             "type": "mrkdwn",
-                                            "text": (f":information_source: You asked Dall-E for: `{prompt}` \n"
-                                                    f"*This is image:* _{image_num}_ *of* _{n_images}_.\n"        
+                                            "text": (f":information_source: *This is image:* _{image_num}_ *of* _{n_images}_.\n"        
                                                     f":robot_face: Your prompt was: `$dalle {prompt}`\n" 
                                                     f"*Filename:* `{filename}`\n"
                                                     f"*Azure accessible until:* `{expires_at}`\n"
@@ -297,12 +304,12 @@ def generate_image(event, channel_id, prompt, n_images, VERBOSE_MODE):
                 {
                     "type": "mrkdwn",
                     "text": (
-                        f"*Summary:* \n"
-                        f"You asked for {n_images} images.\n" 
                         f":information_source: Your prompt was: `$dalle {prompt}` \n"
-                        f"The total size of all the images was {format(total_orig_size, '.2f')}MB from DALL-E.\n"
-                        f"We shrunk them down to {format(total_final_size, '.2f')}MB, a reduction of {format(total_reduction_percent, '.2f')}%.\n"
-                        f"The total time to complete this was {int(minutes)} minutes and {int(seconds)} seconds.\n"
+                        f"You asked for {n_images} images.\n"
+                        f"*Estimated entire cost for this transaction*: `${estimated_cost}`\n"
+                        f"The total size of all the images was `{format(total_orig_size, '.2f')}MB` from DALL-E.\n"
+                        f"We shrunk them down to `{format(total_final_size, '.2f')}MB`, a reduction of `{format(total_reduction_percent, '.2f')}%`.\n"
+                        f"The total time to complete this was `{int(minutes)} minutes and {int(seconds)}` seconds.\n"
                         f"Try again with a new `$dalle` prompt.\n"
                         f"❓Get help at any time with `$help`."
                     )
