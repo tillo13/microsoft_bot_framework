@@ -12,9 +12,9 @@ class Bot:
         self.client = client
 
     def on_turn(self, context: TurnContext):
-        message_content, details, entire_json_payload = self.talk_to_chatbot(context.activity)
+        message_content, details, entire_json_payload, usage = self.talk_to_chatbot(context.activity)  # add usage here
         context.activity.text = message_content
-        context.activity.bot_responses = {"message_content": message_content, "details": details, "entire_json_payload": entire_json_payload}
+        context.activity.bot_responses = {"message_content": message_content, "details": details, "entire_json_payload": entire_json_payload, 'usage': usage}  # add usage here
         return context.activity
 
     def talk_to_chatbot(self, activity: Activity):
@@ -60,6 +60,11 @@ class Bot:
             if response.status_code == 200:
                 result = response.json()
                 print(result)  # print to see the structure
+                
+                # Print the total token usage from the response
+                total_tokens = result.get('usage', {}).get('total_tokens')                
+                print(f'Total token usage in bot_logic.py: {total_tokens}')
+
                 message_content = result['choices'][0]['message']['content']
                 details = "OpenAI response details:"
                 
@@ -73,7 +78,8 @@ class Bot:
 
                 entire_json_payload = f"Entire current JSON payload:{json.dumps(result, indent=2)}"  
 
-                return message_content, details, entire_json_payload
+                return message_content, details, entire_json_payload, result['usage']
+
 
             else:
-                return {"message_content": 'An error occurred while communicating with the bot.', "details": '', "entire_json_payload": ''}
+                return {"message_content": 'An error occurred while communicating with the bot.', "details": '', "entire_json_payload": '', 'usage': {}} 

@@ -54,6 +54,10 @@ def slack_events():
         if event.get('subtype') == 'bot_message' or event.get('user') == bot_user_id:
             return make_response("Ignore bot message", 200)
         event_text_blocks = message_from_blocks(event).lower()
+
+        #test the event_text_block: 
+        print(f"Event text blocks: {event_text_blocks}")
+
         thread_ts = event.get('thread_ts')
         if thread_ts and event['user'] != bot_user_id:
             print(f"THREADED CHATGPT MESSAGE, INVOKING {bot_user_id} BOT.")

@@ -88,6 +88,7 @@ def generate_image(event, channel_id, prompt, n_images, VERBOSE_MODE):
     # Before entering the for loop
     total_orig_size = 0
     total_final_size = 0
+    filename = 'N/A'
 
     try: 
         # Request image from DALL-E
@@ -121,10 +122,28 @@ def generate_image(event, channel_id, prompt, n_images, VERBOSE_MODE):
             original_size_in_MB = 0 
             final_size_in_MB = 0 
 
+            if 'error' in image_data:
+                # image data contains an error
+                error_details = image_data['error']
+                error_message = f"Problem with image `{index+1}`...\n*{error_details['code']}*: `{error_details['message']}`\nContinuing..."
+                client.chat_postMessage(
+                    channel=channel_id,
+                    thread_ts=event["ts"],
+                    text=error_message
+                )
+                continue  # skip rest of the loop for current image
+
             image_url = image_data["url"]
             print(f"DALL-E QUERY {index+1} COMPLETED...")
-            filename = image_url.split("/")[-1].split("?")[0]  # Filename extracted from URL
-            print(f"FILENAME: {filename} \nDALL-E QUERY {index+1} COMPLETED...")
+            # Take the first 15 characters of the prompt
+            short_prompt = prompt[:15]
+            # Replace any non-alphanumeric characters with underscores
+            short_prompt = "".join(c if c.isalnum() else "_" for c in short_prompt)
+            # Make it lowercase
+            short_prompt = short_prompt.lower()
+
+            filename = f"dalle_{short_prompt}_{index+1}_of_{n_images}.png"
+            print(f"SHORTENED FILENAME: {filename} \nDALL-E QUERY {index+1} COMPLETED...")
 
             print("DOWNLOADING GENERATED IMAGE...")
             # Download image
@@ -187,8 +206,12 @@ def generate_image(event, channel_id, prompt, n_images, VERBOSE_MODE):
                     byte_arr = BytesIO()
                     img_resized.save(byte_arr, format='PNG')
                     file_data = byte_arr.getvalue()
-                    img_resized.save(os.path.join('GENERATED_IMAGES', f"dalle_{prompt}_{index+1}_of_{n_images}.png")) 
-                    filepath = os.path.join('GENERATED_IMAGES', f"dalle_{prompt}_{index+1}_of_{n_images}.png") 
+                    short_prompt = prompt[:15].lower()
+                    # Replace any non-alphanumeric characters with underscores
+                    short_prompt = "".join(c if c.isalnum() else "_" for c in short_prompt)
+
+                    img_resized.save(os.path.join('GENERATED_IMAGES', f"dalle_{short_prompt}_{index+1}_of_{n_images}.png")) 
+                    filepath = os.path.join('GENERATED_IMAGES', f"dalle_{short_prompt}_{index+1}_of_{n_images}.png")
 
                 if os.path.isfile(filepath):
                     final_size_in_MB = len(file_data) / (1024*1024)  # converted from Bytes to Megabytes
@@ -254,8 +277,7 @@ def generate_image(event, channel_id, prompt, n_images, VERBOSE_MODE):
                                 blocks=block_message,
                             )
 
-                            print("IMAGE AND IMAGE DETAILS SUCCESSFULLY UPLOADED TO SLACK...")              
-
+                            print("IMAGE AND IMAGE DETAILS SUCCESSFULLY UPLOADED TO SLACK...")
                     except SlackApiError as e:
                         print("FAILED TO UPLOAD THE IMAGE TO SLACK... SENDING THE URL INSTEAD...")
                         client.chat_postMessage(
@@ -263,35 +285,38 @@ def generate_image(event, channel_id, prompt, n_images, VERBOSE_MODE):
                             thread_ts=event["ts"],
                             text=f"Failed to upload image to Slack: {str(e)}. Here is the URL to your image: {image_url}",
                         )
-                    
-    except Exception as e:
-        error_type, error_value, error_traceback = sys.exc_info()
-        tb_str = traceback.format_exception(error_type, error_value, error_traceback)
-        slack_error_message = f"Hm, looks like we hit a snag.  Try again later, or ping andy."
-        print_error_message = f"An error occurred while processing the image: {str(e)}. Please try again later."
-
-        print(print_error_message)
-        
+    except openai.error.OpenAIError as o:
+        if "safety system" in str(o):
+            error_message = f"Out of an abundance of caution, OpenAI flagged the image `{filename}` as inappropriate. Please try a different prompt."
+        else:
+            error_message = f"Encountered an error while working with OpenAI API: {str(o)}. Please try again later."
         client.chat_postMessage(
             channel=channel_id,
             thread_ts=event["ts"],
-            text= slack_error_message
+            text=error_message
         )
-
-    except Exception as e:  # Catch-all for other exceptions.
+    except SlackApiError as e:
+        error_message = f"Encountered an issue while working with Slack API: {str(e)}. Please try again later."
+        client.chat_postMessage(
+            channel=channel_id,
+            thread_ts=event["ts"],
+            text=error_message
+        )
+    except Exception as e:
         error_type, error_value, error_traceback = sys.exc_info()
         tb_str = traceback.format_exception(error_type, error_value, error_traceback)
-        error_message = f"Error: {error_value} \n {''.join(tb_str)}"
-        print(error_message)
+        error_message = f"An error occurred: {error_value} \n {''.join(tb_str)}"
+        client.chat_postMessage(
+            channel=channel_id,
+            thread_ts=event["ts"],
+            text="We've encountered an unexpected error. Please try again later."
+        )
 
     # Summary block
     total_reduction = total_orig_size - total_final_size
-
-    if total_orig_size != 0: 
-        total_reduction_percent = (total_reduction / total_orig_size) * 100  # the percentage of the total reduction
-    else:
-        total_reduction_percent = 0
-
+    total_reduction_percent = 0 # set to 0 by default
+    if total_orig_size > 0:
+        total_reduction_percent = (total_reduction / total_orig_size) * 100
     end_time = time.time()
     elapsed_time = end_time - start_time
     minutes, seconds = divmod(elapsed_time, 60)

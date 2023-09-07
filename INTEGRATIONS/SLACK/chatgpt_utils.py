@@ -20,6 +20,9 @@ bot_initiated_threads = []
 def get_thread_starter_user_id(channel, thread_ts):
     response = client.conversations_replies(channel=channel, ts=thread_ts)
     starter_message = response['messages'][0]
+
+    #test starter:
+    print(f"Starter message: {starter_message}")
     starter_user_id = starter_message['user']
 
     if starter_user_id == bot_user_id and thread_ts not in bot_initiated_threads:
@@ -30,7 +33,7 @@ def get_thread_starter_user_id(channel, thread_ts):
 # initialize empty lists in the global scope
 bot_replied_to_messages_ts = []
 
-def process_activity(event, verbose_mode):  # add verbose_mode here
+def process_activity(event, verbose_mode):  
     channel_id = event['channel']
     thread_ts = event.get('thread_ts')
 
@@ -53,28 +56,34 @@ def process_activity(event, verbose_mode):  # add verbose_mode here
     message_activity = Activity().deserialize(activity)
     bot_adapter.process_activity(message_activity)
 
+    # Check if 'usage' key exists in message_activity.bot_responses
+    if 'usage' in message_activity.bot_responses:
+        total_tokens = message_activity.bot_responses['usage'].get('total_tokens', 0)  # retrieving total_tokens from 'usage'
+        print(f"Total tokens in process_activity: {total_tokens}")
+    else:
+        total_tokens = 0
+
     send_message(
         event["channel"], 
         event["ts"], 
         message_activity.bot_responses['message_content'], 
         message_activity.bot_responses['details'], 
         message_activity.bot_responses['entire_json_payload'], 
+        total_tokens,
         verbose_mode
     )
 
-def send_message(channel, thread_ts, bot_message, response_json, entire_json_payload, verbose_mode):
-    # Format response
+def send_message(channel, thread_ts, bot_message, response_json, entire_json_payload, total_tokens, verbose_mode):
     formatted_response_str = json.dumps(response_json, indent=2)
 
-    # First define your message_block
     message_block = [
-            {
-                "type": "section",
-                "text": {
-                    "type": "mrkdwn",
-                    "text": bot_message
-                }
+        {
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": bot_message
             }
+        }
     ]
 
     if verbose_mode:
@@ -98,6 +107,42 @@ def send_message(channel, thread_ts, bot_message, response_json, entire_json_pay
             }
         ]
 
-    # Now, send the client.chat_postMessage containing your message_block
+        # Add cost calculation here
+    with open('openai_costs_2023sept7.json') as f:
+        costs = json.load(f)
+
+    # openai costs in USD per token
+    openai_cost_per_token = costs["Language Models"]["GPT-3.5 Turbo"]["4K context"]["Input"]
+    openai_cost_per_token = float(openai_cost_per_token) # ensure it's a float
+
+    # Tokens used calculation
+    tokens_used = float(total_tokens) 
+
+    print(f"Total tokens: {total_tokens}")
+    print(f"Cost per token: {openai_cost_per_token}")
+    estimated_cost = tokens_used  * openai_cost_per_token
+
+    # Calculate the cost 
+    estimated_cost = tokens_used  * openai_cost_per_token
+    #estimated_cost = tokens_used  * openai_cost_per_token * 100  # Multiplied by 100 here for demonstration purposes
+    print("Estimated cost in chatgpt_utils.py: {:.10f}".format(estimated_cost))
+
+
+
+    message_block += [
+        {
+            "type": "divider"
+        },
+        {
+            "type": "context",
+            "elements": [
+                {
+                    "type": "mrkdwn",
+                    "text":  f":moneybag: Estimated total running cost: $ {estimated_cost:.5f} (calculated as {total_tokens} tokens x $ {openai_cost_per_token:.5f} per token)"
+                }
+            ],
+        }
+    ]
+
     client.chat_postMessage(channel=channel, thread_ts=thread_ts,
                             text="A placeholder message titled test123.", blocks=message_block)
