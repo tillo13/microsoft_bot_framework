@@ -10,13 +10,15 @@ from botbuilder.schema import Activity
 from threading import Thread
 from datetime import datetime
 from dalle_utils import generate_image
+from chatgpt_utils import get_thread_starter_user_id, process_activity  # add this line
+
 
 
 # load environment variables from .env file
 load_dotenv('../../.env')
 
 
-VERBOSE_MODE = False  # Set to True for verbose output to slack showing json
+VERBOSE_MODE = True  # Set to True for verbose output to slack showing json
 
 app = Flask(__name__)
 slack_token = os.getenv('SLACK_BOT_TOKEN')
@@ -44,19 +46,6 @@ def parse_dalle_command(command_text):
             n_images = None
 
     return n_images, prompt
-
-def get_thread_starter_user_id(channel, thread_ts):
-    response = client.conversations_replies(channel=channel, ts=thread_ts)
-    starter_message = response['messages'][0]
-    starter_user_id = starter_message['user']
-
-    if starter_user_id == bot_user_id and thread_ts not in bot_initiated_threads:
-        bot_initiated_threads.append(thread_ts)
-        
-    return starter_user_id
-
-# initialize empty lists in the global scope
-bot_replied_to_messages_ts = []
 
 def message_from_blocks(event):
     blocks = event.get('blocks', [])
@@ -89,92 +78,23 @@ def slack_events():
         thread_ts = event.get('thread_ts')
         if thread_ts and event['user'] != bot_user_id:
             print(f"THREADED CHATGPT MESSAGE, INVOKING {bot_user_id} BOT.")
-            Thread(target=process_activity, args=(event,)).start()  # start a new thread to process the activity
+            Thread(target=process_activity, args=(event, VERBOSE_MODE)).start()   # pass VERBOSE_MODE here
+        
         else:
             if (event.get('type') == 'app_mention') or ("@bot" in event_text_blocks):
                 print(f"USER INVOKED BOT, REPLYING TO USER VIA CHATGPT.")
-                Thread(target=process_activity, args=(event,)).start()  # start a new thread to process the activity
+                Thread(target=process_activity, args=(event, VERBOSE_MODE)).start()  # pass VERBOSE_MODE here
 
             elif "$dalle" in event_text_blocks:
                 print(f"USER INVOKED DALLE, CREATING IMAGE.")
-                prompt = event_text_blocks.replace("$dalle", "").strip()  # get prompt from user's message
-                Thread(target=generate_image, args=(event, channel_id, prompt)).start()
+                prompt = event_text_blocks.replace("$dalle", "").strip()
+                Thread(target=generate_image, args=(event, channel_id, prompt, VERBOSE_MODE)).start()
 
             else:
                 print("USER USED SLACK, BUT DID NOT CALL BOT.")
+        
         print("SENDING SLACK AN HTTP200 SO WE CAN CONTINUE PROCESSING...")
-    return make_response("", 200)  # Respond immediately to Slack
-
-def process_activity(event):
-    channel_id = event['channel']
-    thread_ts = event.get('thread_ts')
-
-    # Convert thread_ts to datetime object
-    if thread_ts is not None:
-        # Slack's timestamp is in seconds, need to convert it to a datetime object
-        timestamp = datetime.utcfromtimestamp(float(thread_ts))
-    else:
-        timestamp = None
-
-    activity = {
-        "type": "message",
-        "text": event["text"],
-        "channelId": "slack",
-        "conversation": {"id": channel_id,},
-        "from": {"id": event.get("user_id")},
-        "timestamp": timestamp, # set the timestamp attribute
-    }
-
-    message_activity = Activity().deserialize(activity)
-    bot_adapter.process_activity(message_activity)
-
-    send_message(
-        event["channel"],
-        event["ts"],
-        message_activity.bot_responses['message_content'],
-        message_activity.bot_responses['details'],
-        message_activity.bot_responses['entire_json_payload']
-    )
-
-def send_message(channel, thread_ts, bot_message, response_json, entire_json_payload):
-    # Format response
-    formatted_response_str = json.dumps(response_json, indent=2)
-
-    # First define your message_block
-    message_block = [
-            {
-                "type": "section",
-                "text": {
-                    "type": "mrkdwn",
-                    "text": bot_message
-                }
-            }
-    ]
-
-    if VERBOSE_MODE:
-        message_block += [
-            {
-                "type": "divider"
-            },
-            {
-                "type": "section",
-                "text": {
-                    "type": "mrkdwn",
-                    "text": f"```{formatted_response_str}```",                
-                }
-            },
-            {
-                "type": "section",
-                "text": {
-                    "type": "mrkdwn",
-                    "text": f"```{entire_json_payload}```",                
-                }
-            }
-        ]
-
-    # Now, send the client.chat_postMessage containing your message_block
-    client.chat_postMessage(channel=channel, thread_ts=thread_ts,
-                            text="A placeholder message titled test123.", blocks=message_block)
+        return make_response("", 200)
 
 if __name__ == "__main__":
     app.run(port=int(os.getenv('PORT', 3000)))

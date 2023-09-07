@@ -28,7 +28,7 @@ slack_token = os.getenv('SLACK_BOT_TOKEN')
 client = WebClient(token=slack_token)
 
 
-def generate_image(event, channel_id, prompt):
+def generate_image(event, channel_id, prompt, VERBOSE_MODE):
     start_time = time.time() # records the start time
     print("Asking DALL-E for 3 images...")
     client.chat_postMessage(
@@ -49,6 +49,18 @@ def generate_image(event, channel_id, prompt):
 
         # Print the complete response from DALL-E
         print("RESPONSE FROM DALLE_OPENAI: ", response)
+
+        if VERBOSE_MODE:   # if VERBOSE_MODE was passed here as argument
+            client.chat_postMessage(
+                channel=channel_id,
+                thread_ts=event["ts"],
+                text = "*VERBOSE MODE ENABLED. Posting DETAILED additional information from the call...*",
+            )
+            client.chat_postMessage(
+                channel=channel_id,
+                thread_ts=event["ts"],
+                text = f"The DALLE-OPENAI Response: {response}",  # perhaps could choose to prettify
+            )
 
         # Check if folder exists, if not, create it
         if not os.path.exists('GENERATED_IMAGES'):
