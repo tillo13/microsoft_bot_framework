@@ -29,18 +29,22 @@ client = WebClient(token=slack_token)
 
 
 def generate_image(event, channel_id, prompt):
+    start_time = time.time() # records the start time
     print("Asking DALL-E for 3 images...")
     client.chat_postMessage(
         channel=channel_id,
         thread_ts=event["ts"],
         text="Asking DALL-E for 3 images...",
     )
+    # Before entering the for loop
+    total_orig_size = 0
+    total_final_size = 0
 
     try: 
         # Request image from DALL-E
         response = openai.Image.create(
             prompt=prompt,
-            n=5
+            n=3
         )
 
         # Print the complete response from DALL-E
@@ -52,10 +56,23 @@ def generate_image(event, channel_id, prompt):
 
         #process each file
         for index, image_data in enumerate(response["data"]):
+            # Initialize these variables at the start of the loop for each image data
+            original_size_in_MB = 0 
+            final_size_in_MB = 0 
+
             image_url = image_data["url"]
             print(f"DALL-E QUERY {index+1} COMPLETED...")
             filename = image_url.split("/")[-1].split("?")[0]  # Filename extracted from URL
             print(f"FILENAME: {filename} \nDALL-E QUERY {index+1} COMPLETED...")
+
+            print("DOWNLOADING GENERATED IMAGE...")
+            # Download image
+            image_response = requests.get(image_url)
+            file_data = image_response.content
+
+            # Original size
+            original_size_in_MB = len(file_data) / (1024*1024) # This line was moved up
+            total_orig_size += original_size_in_MB  # This line was moved down
 
             # parsing SAS token for image details
             parsed = urlparse(image_url)
@@ -81,31 +98,21 @@ def generate_image(event, channel_id, prompt):
             #sas_details += f"Key Start Time (skt): {sas_token.get('skt')}\n" 
             #sas_details += f"Tenant ID for Azure Storage Service (sktid): {sas_token.get('sktid')}\n"
 
-            # Send the SAS details to the same channel
-            client.chat_postMessage(
-                channel=channel_id,
-                thread_ts=event["ts"],
-                text=f"DALLE creation details...\n{sas_details}",
-            )
-
             print("DOWNLOADING GENERATED IMAGE...")
             # Download image
             image_response = requests.get(image_url)
             file_data = image_response.content
 
+            # Original size
+            #original_size_in_MB = len(file_data) / (1024*1024)
+            #total_orig_size += original_size_in_MB  # Add original size to the total
+
             # if image if over 3MB, let's reduce the size
             if len(file_data) > 3e6:  # 3e6 = 3MB
                 print("IMAGE SIZE OVER 3MB, STARTING TO RESIZE...")
-                client.chat_postMessage(
-                    channel=channel_id,
-                    thread_ts=event["ts"],
-                    text=f"{filename} is over 3MB, it's being reduced in size...",
-
-                )
 
                 img = Image.open(BytesIO(file_data))
                 scale_factor = 1
-
                 
                 # original size
                 original_size_in_MB = len(file_data) / (1024*1024)
@@ -125,6 +132,7 @@ def generate_image(event, channel_id, prompt):
                 if os.path.isfile(filepath):
                     final_size_in_MB = len(file_data) / (1024*1024)  # converted from Bytes to Megabytes
                     size_reduction = original_size_in_MB - final_size_in_MB
+                    total_final_size += final_size_in_MB  # Add final size to the total
                     size_reduction_percent = (size_reduction / original_size_in_MB) * 100  # the percentage of the reduction
                     
                     print(f"Original size: {format(original_size_in_MB, '.2f')} MB")
@@ -132,61 +140,69 @@ def generate_image(event, channel_id, prompt):
                     print(f"Size reduction: {format(size_reduction, '.2f')} MB - {format(size_reduction_percent, '.2f')}%")
                     print("UPLOADING THE RESIZED IMAGE TO SLACK...")
 
-                    client.chat_postMessage(
-                    channel=channel_id,
-                    thread_ts=event["ts"],
-                    text=f"Original size: {format(original_size_in_MB, '.2f')} MB. \nFinal size: {format(final_size_in_MB, '.2f')} MB. \nSize was reduced by {format(size_reduction, '.2f')} MB - {format(size_reduction_percent, '.2f')}%",
-                    )
-                try:
-                    with open(filepath, 'rb') as file:
-                        files = {'file': file}
-                        too_large_message = f"{filename} is over 3MB, it's being reduced in size..."
-                        payload = {
-                            "initial_comment": filename,
-                            "channels": channel_id,
-                            "thread_ts": event["ts"],
-                        }
-                        headers = {
-                            "Authorization": "Bearer {}".format(slack_token)
-                        }
-                        response = requests.post(
-                            "https://slack.com/api/files.upload",
-                            headers=headers, files=files, data=payload
+                    try:
+                        with open(filepath, 'rb') as file:
+                            files = {'file': file}
+                            too_large_message = f"{filename} is over 3MB, it's being reduced in size..."
+                            payload = {
+                                #"initial_comment": filename,
+                                "channels": channel_id,
+                                "thread_ts": event["ts"],
+                            }
+                            headers = {
+                                "Authorization": "Bearer {}".format(slack_token)
+                            }
+                            
+                            # Here, you are uploading the image first.
+                            response = requests.post(
+                                "https://slack.com/api/files.upload",
+                                headers=headers, files=files, data=payload
+                            )
+                            if not response.json()['ok']:
+                                raise SlackApiError(response.json()['error'])
+                            
+                            image_num = index + 1  # We add 1 because `index` starts from 0
+                            # Now send the image details block message after successful upload
+                            block_message = [
+                                {
+                                    "type": "context",
+                                    "elements": [
+                                        {
+                                            "type": "mrkdwn",
+                                            "text": (
+                                                    f":information_source: You asked for: `{prompt}` \n"
+                                                    f"*This is image:* _{image_num}_ *of* _3_.\n"
+                                                    f"*Filename:* `{filename}`\n"
+                                                    f"*Azure accessible until:* `{expires_at}`\n"
+                                                    f"*Expires in:* `{int(hours)} hours and {int(minutes)} minutes`\n"
+                                                    f"*Original file size:* `{format(original_size_in_MB, '.2f')} MB`\n"
+                                                    f"*Final file size:* `{format(final_size_in_MB, '.2f')} MB`\n" 
+                                                    f"*Size reduction:* `{format(size_reduction, '.2f')} MB` - `{format(size_reduction_percent, '.2f')}%`\n"
+                                                    )
+                                        }
+                                    ]
+                                },
+                                {
+                                    "type": "divider"
+                                }
+                            ]
+
+                            client.chat_postMessage(
+                                channel=channel_id,
+                                thread_ts=event["ts"],
+                                blocks=block_message,
+                            )
+
+                            print("IMAGE AND IMAGE DETAILS SUCCESSFULLY UPLOADED TO SLACK...")              
+
+                    except SlackApiError as e:
+                        print("FAILED TO UPLOAD THE IMAGE TO SLACK... SENDING THE URL INSTEAD...")
+                        client.chat_postMessage(
+                            channel=channel_id,
+                            thread_ts=event["ts"],
+                            text=f"Failed to upload image to Slack: {str(e)}. Here is the URL to your image: {image_url}",
                         )
-                        if not response.json()['ok']:
-                            raise SlackApiError(response.json()['error'])
-                    print("IMAGE UPLOADED SUCCESSFULLY TO SLACK...")
-                except SlackApiError as e:
-                    print("FAILED TO UPLOAD THE IMAGE TO SLACK... SENDING THE URL INSTEAD...")
-                    client.chat_postMessage(
-                        channel=channel_id,
-                        thread_ts=event["ts"],
-                        text=f"Failed to upload image to Slack: {str(e)}. Here is the URL to your image: {image_url}",
-                    )
-
-    except SlackApiError as e:
-        print("Slack API Error:", str(e))
-        error_message = f"Encountered an error while working with Slack: {str(e)}. Please try again later."
-        client.chat_postMessage(
-            channel=channel_id,
-            thread_ts=event["ts"],
-            text= error_message
-        )
-
-    except openai.error.OpenAIError as o:
-        if "safety system" in str(o):
-            print("Inappropriate content detected by OpenAI's safety system.")
-            error_message = f"OUT OF AN ABUNDANCE OF CAUTION, OPENAI FLAGGED THE IMAGE `{filename}` AS INAPPROPRIATE, TRY AGAIN."
-        else:
-            print("OpenAI API Error:", str(o))
-            error_message = f"Encountered an error while working with OpenAI: {str(o)}. Please try again later."
-            
-        client.chat_postMessage(
-            channel=channel_id,
-            thread_ts=event["ts"],
-            text= error_message
-        )
-
+                    
     except Exception as e:
         error_type, error_value, error_traceback = sys.exc_info()
         tb_str = traceback.format_exception(error_type, error_value, error_traceback)
@@ -206,3 +222,40 @@ def generate_image(event, channel_id, prompt):
         tb_str = traceback.format_exception(error_type, error_value, error_traceback)
         error_message = f"Error: {error_value} \n {''.join(tb_str)}"
         print(error_message)
+
+    # Summary block
+    total_reduction = total_orig_size - total_final_size
+    total_reduction_percent = (total_reduction / total_orig_size) * 100  # the percentage of the total reduction
+    end_time = time.time()
+    elapsed_time = end_time - start_time
+    minutes, seconds = divmod(elapsed_time, 60)
+
+    # Prepare summary message
+    summary_message = [
+        {
+            "type": "context",
+            "elements": [
+                {
+                    "type": "mrkdwn",
+                    "text": (
+                        f"*Summary:* \n"
+                        f"You asked for 3 images.\n" 
+                        f":information_source: Your prompt was: `$dalle {prompt}` \n"
+                        f"The total size of all the images was {format(total_orig_size, '.2f')}MB from DALL-E.\n"
+                        f"We shrunk them down to {format(total_final_size, '.2f')}MB, a reduction of {format(total_reduction_percent, '.2f')}%.\n"
+                        f"The total time to complete this was {int(minutes)} minutes and {int(seconds)} seconds.\n"
+                        f"Try again with a new `$dalle` prompt.\n"
+                        f"❓Get help at any time with `$help`."
+                    )
+                }
+            ]
+        },
+        {"type": "divider"},
+    ]
+
+    # Post the summary message
+    client.chat_postMessage(
+        channel=channel_id,
+        thread_ts=event["ts"],
+        blocks=summary_message,
+    )
