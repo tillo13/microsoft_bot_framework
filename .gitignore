@@ -5,3 +5,7 @@ package-lock.json
 .DS_Store
 **/__pycache__/
 **/GENERATED_IMAGES/
+
+#ignore any test data and underscores:
+**/test*
+**/_
