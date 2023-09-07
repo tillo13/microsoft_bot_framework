@@ -1,3 +1,4 @@
+#passed in from  from slack_events_listener.py
 import openai
 from slack_sdk import WebClient
 from slack_sdk.errors import SlackApiError
