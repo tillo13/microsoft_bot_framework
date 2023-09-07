@@ -9,14 +9,11 @@ from bot_adapter import Adapter
 from botbuilder.schema import Activity
 from threading import Thread
 from datetime import datetime
-from dalle_utils import generate_image
-from chatgpt_utils import get_thread_starter_user_id, process_activity  # add this line
-
-
+from dalle_utils import generate_image, parse_dalle_command
+from chatgpt_utils import get_thread_starter_user_id, process_activity 
 
 # load environment variables from .env file
 load_dotenv('../../.env')
-
 
 VERBOSE_MODE = True  # Set to True for verbose output to slack showing json
 
@@ -28,24 +25,6 @@ bot_adapter = Adapter(Bot(client))
 #set vars for things we could track to not duplicate later
 bot_user_id = client.auth_test()["user_id"]
 bot_initiated_threads = []
-
-def parse_dalle_command(command_text):
-    # Split the commands into n_images and prompt by looking for the first space
-    possible_n_images, prompt = command_text.split(' ', 1)
-
-    # Try to convert the first part to an integer
-    try:
-        n_images = int(possible_n_images)
-    except ValueError:
-        # If it's not an integer, then everything must be part of the prompt
-        n_images = 3  # Default
-        prompt = command_text
-    else:
-        # It is an integer, but we need to confirm it's within the expected range
-        if not 1 <= n_images <= 10:  
-            n_images = None
-
-    return n_images, prompt
 
 def message_from_blocks(event):
     blocks = event.get('blocks', [])

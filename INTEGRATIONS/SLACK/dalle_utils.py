@@ -27,6 +27,23 @@ openai.api_version = os.getenv('OPENAI_DALLE_VERSION')
 slack_token = os.getenv('SLACK_BOT_TOKEN')
 client = WebClient(token=slack_token)
 
+def parse_dalle_command(command_text):
+    # Split the commands into n_images and prompt by looking for the first space
+    possible_n_images, prompt = command_text.split(' ', 1)
+
+    # Try to convert the first part to an integer
+    try:
+        n_images = int(possible_n_images)
+    except ValueError:
+        # If it's not an integer, then everything must be part of the prompt
+        n_images = 3  # Default
+        prompt = command_text
+    else:
+        # It is an integer, but we need to confirm it's within the expected range
+        if not 1 <= n_images <= 10:  
+            n_images = None
+
+    return n_images, prompt
 
 def generate_image(event, channel_id, prompt, VERBOSE_MODE):
     start_time = time.time() # records the start time
