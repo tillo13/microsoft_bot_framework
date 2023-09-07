@@ -66,8 +66,9 @@ def slack_events():
 
             elif "$dalle" in event_text_blocks:
                 print(f"USER INVOKED DALLE, CREATING IMAGE.")
-                prompt = event_text_blocks.replace("$dalle", "").strip()
-                Thread(target=generate_image, args=(event, channel_id, prompt, VERBOSE_MODE)).start()
+                dalle_command = event_text_blocks.replace("$dalle", "").strip()
+                n_images, prompt = parse_dalle_command(dalle_command)
+                Thread(target=generate_image, args=(event, channel_id, prompt, n_images, VERBOSE_MODE)).start()
 
             else:
                 print("USER USED SLACK, BUT DID NOT CALL BOT.")

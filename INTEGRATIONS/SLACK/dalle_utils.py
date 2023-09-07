@@ -28,33 +28,45 @@ slack_token = os.getenv('SLACK_BOT_TOKEN')
 client = WebClient(token=slack_token)
 
 def parse_dalle_command(command_text):
-    # Split the commands into n_images and prompt by looking for the first space
-    possible_n_images, prompt = command_text.split(' ', 1)
-
-    # Try to convert the first part to an integer
-    try:
-        n_images = int(possible_n_images)
-    except ValueError:
-        # If it's not an integer, then everything must be part of the prompt
-        n_images = 3  # Default
-        prompt = command_text
-    else:
-        # It is an integer, but we need to confirm it's within the expected range
-        if not 1 <= n_images <= 10:  
-            n_images = None
-
+    n_images = 3  # set the default value
+    prompt = command_text.strip()
+  
+    if '--' in command_text:
+        command_parts = command_text.split(' ')
+        for index, part in enumerate(command_parts):
+            if '--' in part:
+                try:
+                    n_images = min(int(part.replace('--', '')), 5)  # capping images at 5
+                    command_parts.pop(index)  # remove this part from the command
+                    prompt = ' '.join(command_parts).strip()  # recreate the prompt
+                except ValueError:
+                    pass
     return n_images, prompt
 
-def generate_image(event, channel_id, prompt, VERBOSE_MODE):
+def generate_image(event, channel_id, prompt, n_images, VERBOSE_MODE):
+    print(f"COMMAND RECEIVED: Ask DALL-E for {n_images} images...")
     start_time = time.time() # records the start time
-    print("Asking DALL-E for 3 images...")
+
+    # Check if entered number was more than limit and send Slack message
+    command_parts = event["text"].split(' ')
+    for index, part in enumerate(command_parts):
+        if '--' in part:
+            try:
+                entered_number = int(part.replace('--', ''))  
+                if entered_number > 5:
+                    warning_message = f":exclamation: Doh! You requested {entered_number} images, but the maximum is 5. We'll proceed with 5 images."
+                    print(warning_message)  # Output warning message to terminal
+                    client.chat_postMessage(channel=channel_id, text=warning_message, thread_ts=event["ts"])  # Send warning to user via Slack
+            except ValueError:
+                pass
+
     # Initial message with bot animation and prompt
     initial_message_block = [
         {
             "type": "section",
             "text": {
                 "type": "mrkdwn",
-                "text": f":robot_face: *Connecting to DALL-E for your 3 images, please stand by...*\n\n*...creating something neat for:* `{prompt}`..."
+                "text": f":robot_face: *Connecting to DALL-E for your {n_images} images, please stand by...*\n\n*...Dall-E is creating for:* `{prompt}`..."
             }
         }
     ]
@@ -62,6 +74,7 @@ def generate_image(event, channel_id, prompt, VERBOSE_MODE):
     client.chat_postMessage(
         channel=channel_id,
         thread_ts=event["ts"],
+        text="Generating images with DALL-E...",
         blocks=initial_message_block
     )
     # Before entering the for loop
@@ -72,7 +85,7 @@ def generate_image(event, channel_id, prompt, VERBOSE_MODE):
         # Request image from DALL-E
         response = openai.Image.create(
             prompt=prompt,
-            n=3
+            n=n_images
         )
 
         # Print the complete response from DALL-E
@@ -166,8 +179,8 @@ def generate_image(event, channel_id, prompt, VERBOSE_MODE):
                     byte_arr = BytesIO()
                     img_resized.save(byte_arr, format='PNG')
                     file_data = byte_arr.getvalue()
-                    img_resized.save(os.path.join('GENERATED_IMAGES', f"dalle_{prompt}_{index}.png"))  # Save image to generated images directory
-                    filepath = os.path.join('GENERATED_IMAGES', f"dalle_{prompt}_{index}.png")
+                    img_resized.save(os.path.join('GENERATED_IMAGES', f"dalle_{prompt}_{index+1}_of_{n_images}.png")) 
+                    filepath = os.path.join('GENERATED_IMAGES', f"dalle_{prompt}_{index+1}_of_{n_images}.png") 
 
                 if os.path.isfile(filepath):
                     final_size_in_MB = len(file_data) / (1024*1024)  # converted from Bytes to Megabytes
@@ -209,9 +222,9 @@ def generate_image(event, channel_id, prompt, VERBOSE_MODE):
                                     "elements": [
                                         {
                                             "type": "mrkdwn",
-                                            "text": (
-                                                    f":information_source: You asked for: `{prompt}` \n"
-                                                    f"*This is image:* _{image_num}_ *of* _3_.\n"
+                                            "text": (f":information_source: You asked Dall-E for: `{prompt}` \n"
+                                                    f"*This is image:* _{image_num}_ *of* _{n_images}_.\n"        
+                                                    f":robot_face: Your prompt was: `$dalle {prompt}`\n" 
                                                     f"*Filename:* `{filename}`\n"
                                                     f"*Azure accessible until:* `{expires_at}`\n"
                                                     f"*Expires in:* `{int(hours)} hours and {int(minutes)} minutes`\n"
@@ -230,6 +243,7 @@ def generate_image(event, channel_id, prompt, VERBOSE_MODE):
                             client.chat_postMessage(
                                 channel=channel_id,
                                 thread_ts=event["ts"],
+                                text=f"Posting image number {image_num+1} generated by DALL-E...",
                                 blocks=block_message,
                             )
 
@@ -265,7 +279,12 @@ def generate_image(event, channel_id, prompt, VERBOSE_MODE):
 
     # Summary block
     total_reduction = total_orig_size - total_final_size
-    total_reduction_percent = (total_reduction / total_orig_size) * 100  # the percentage of the total reduction
+
+    if total_orig_size != 0: 
+        total_reduction_percent = (total_reduction / total_orig_size) * 100  # the percentage of the total reduction
+    else:
+        total_reduction_percent = 0
+
     end_time = time.time()
     elapsed_time = end_time - start_time
     minutes, seconds = divmod(elapsed_time, 60)
@@ -279,7 +298,7 @@ def generate_image(event, channel_id, prompt, VERBOSE_MODE):
                     "type": "mrkdwn",
                     "text": (
                         f"*Summary:* \n"
-                        f"You asked for 3 images.\n" 
+                        f"You asked for {n_images} images.\n" 
                         f":information_source: Your prompt was: `$dalle {prompt}` \n"
                         f"The total size of all the images was {format(total_orig_size, '.2f')}MB from DALL-E.\n"
                         f"We shrunk them down to {format(total_final_size, '.2f')}MB, a reduction of {format(total_reduction_percent, '.2f')}%.\n"
@@ -297,5 +316,6 @@ def generate_image(event, channel_id, prompt, VERBOSE_MODE):
     client.chat_postMessage(
         channel=channel_id,
         thread_ts=event["ts"],
+        text="Summary of DALL-E image generation request...",
         blocks=summary_message,
     )
