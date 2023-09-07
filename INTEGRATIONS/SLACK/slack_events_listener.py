@@ -15,7 +15,7 @@ from chatgpt_utils import get_thread_starter_user_id, process_activity
 # load environment variables from .env file
 load_dotenv('../../.env')
 
-VERBOSE_MODE = True  # Set to True for verbose output to slack showing json
+VERBOSE_MODE = False  # Set to True for verbose output to slack showing json
 
 app = Flask(__name__)
 slack_token = os.getenv('SLACK_BOT_TOKEN')

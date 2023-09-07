@@ -48,10 +48,21 @@ def parse_dalle_command(command_text):
 def generate_image(event, channel_id, prompt, VERBOSE_MODE):
     start_time = time.time() # records the start time
     print("Asking DALL-E for 3 images...")
+    # Initial message with bot animation and prompt
+    initial_message_block = [
+        {
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": f":robot_face: *Connecting to DALL-E for your 3 images, please stand by...*\n\n*...creating something neat for:* `{prompt}`..."
+            }
+        }
+    ]
+    
     client.chat_postMessage(
         channel=channel_id,
         thread_ts=event["ts"],
-        text="Asking DALL-E for 3 images...",
+        blocks=initial_message_block
     )
     # Before entering the for loop
     total_orig_size = 0
