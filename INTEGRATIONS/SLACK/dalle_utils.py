@@ -332,9 +332,10 @@ def generate_image(event, channel_id, prompt, n_images, VERBOSE_MODE):
                         f":information_source: Your prompt was: `$dalle {prompt}` \n"
                         f"You asked for {n_images} images.\n"
                         f"*Estimated entire cost for this transaction*: `${estimated_cost}`\n"
-                        f"The total size of all the images was `{format(total_orig_size, '.2f')}MB` from DALL-E.\n"
-                        f"We shrunk them down to `{format(total_final_size, '.2f')}MB`, a reduction of `{format(total_reduction_percent, '.2f')}%`.\n"
-                        f"The total time to complete this was `{int(minutes)} minutes and {int(seconds)}` seconds.\n"
+                        f"The total size from DALL-E of all the images was `{format(total_orig_size, '.2f')}MB`\n"
+                        f"We shrunk the file cumulatively down to: `{format(total_final_size, '.2f')}MB`\n"
+                        f"This is an overall reduction of `{format(total_reduction_percent, '.2f')}%`.\n"
+                        f"The total time to complete this was `{int(minutes)} minutes and {int(seconds)} seconds`\n"
                         f"Try again with a new `$dalle` prompt.\n"
                         f"❓Get help at any time with `$help`."
                     )
