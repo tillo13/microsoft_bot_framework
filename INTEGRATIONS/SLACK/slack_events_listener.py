@@ -49,86 +49,100 @@ def message_from_blocks(event):
 @app.route('/slack/events', methods=['POST'])
 def slack_events():
     data = request.get_json()
-    bot_mention = f"<@{bot_user_id}>"
+
+    # Print the entire request payload in test
+    #print(f"HERE IS THE PAYLOAD SLACK_EVENTS IS PROCESSSING: {data}")
+
+    #bot_mention = f"<@{bot_user_id}>"
     if "challenge" in data:
         return make_response(data["challenge"], 200, {"content_type": "application/json"})
     if "event" in data:
         event = data["event"]
-        # Retrieve the channel_id from the event data:
-        channel_id = event['channel']
+        event_type = event.get('type')
 
-        # Ignore bot's own messages
-        if event.get('subtype') == 'bot_message' or event.get('user') == bot_user_id:
-            return make_response("Ignore bot message", 200)
-        event_text_blocks = message_from_blocks(event).lower()
-
-        # If the event is a message, react with the hourglass emoji  
-        if event.get('type') == 'message':
-            timestamp = event.get('ts')
-            # Send a reaction (this needs the reactions:write permission scope)
-            client.reactions_add(
-                name='hourglass',
-                channel=channel_id,
-                timestamp=timestamp
-            )
-
-        # Test the event_text_block:
-        print(f"Event text blocks: {event_text_blocks}")
-
-        thread_ts = event.get('thread_ts')
-
-        if "$history" in event_text_blocks:
-            # Fetch the thread history
-            thread_history = client.conversations_replies(
-                channel=channel_id, ts=str(thread_ts), limit=100)['messages']
-
-            # Get the user prompts papertrail
-            user_prompts = user_prompt_papertrail(thread_history)
-
-            # Post the user prompts papertrail to Slack
-            client.chat_postMessage(
-                channel=channel_id, thread_ts=thread_ts, text=f"User Prompts Papertrail:\n{user_prompts}")
-            print("SENDING SLACK AN HTTP200 AFTER POSTING PAPERTRAIL...")
+        if event_type == 'reaction_added':
+            print("EMOJI ADDED")
             return make_response("", 200)
-        elif thread_ts and event['user'] != bot_user_id:
-            print(f"THREADED CHATGPT MESSAGE, INVOKING {bot_user_id} BOT.")
-            Thread(target=process_activity, args=(event, VERBOSE_MODE)).start()  
-       
-        else:
-            if (event.get('type') == 'app_mention') or ("@bot" in event_text_blocks):
-                print(f"USER INVOKED BOT, REPLYING TO USER VIA CHATGPT.")
+
+        elif event_type == 'message':
+
+            # Retrieve the channel_id from the event data:
+            channel_id = event['channel']
+
+            # Ignore bot's own messages
+            if event.get('subtype') == 'bot_message' or event.get('user') == bot_user_id:
+                return make_response("Ignore bot message", 200)
+            event_text_blocks = message_from_blocks(event).lower()
+
+            # If the event is a message, react with the hourglass emoji  
+            if event.get('type') == 'message':
+                timestamp = event.get('ts')
+                # Send a reaction
+                try:
+                    client.reactions_add(name='hourglass', channel=channel_id, timestamp=timestamp)
+                except SlackApiError as e:
+                    print(f"Got an error: {e.response['error']}")
+                
+
+            # Test the event_text_block:
+            print(f"Event text blocks: {event_text_blocks}")
+
+            thread_ts = event.get('thread_ts')
+
+            if "$history" in event_text_blocks:
+                # Fetch the thread history
+                thread_history = client.conversations_replies(
+                    channel=channel_id, ts=str(thread_ts), limit=100)['messages']
+
+                # Get the user prompts papertrail
+                user_prompts = user_prompt_papertrail(thread_history)
+
+                # Post the user prompts papertrail to Slack
+                client.chat_postMessage(
+                    channel=channel_id, thread_ts=thread_ts, text=f"User Prompts Papertrail:\n{user_prompts}")
+                print("SENDING SLACK AN HTTP200 AFTER POSTING PAPERTRAIL...")
+                return make_response("", 200)
+            elif thread_ts and event['user'] != bot_user_id:
+                print(f"THREADED CHATGPT MESSAGE, INVOKING {bot_user_id} BOT.")
                 Thread(target=process_activity, args=(event, VERBOSE_MODE)).start()  
-
-            elif "$memory" in event_text_blocks:
-                Thread(target=process_activity, args=(event, VERBOSE_MODE)).start()  
-
-            elif "$dalle" in event_text_blocks:
-                print(f"USER INVOKED DALLE, CREATING IMAGE.")
-                dalle_command = event_text_blocks.replace("$dalle", "").strip()
-                n_images, prompt = parse_dalle_command(dalle_command)
-                Thread(target=generate_image, args=(event, channel_id, prompt, n_images, VERBOSE_MODE)).start()
-
-            # Check if bot is directly mentioned or user uses the $jira --query command
-            #or
-            if (event.get('type') == 'app_mention' or "<@{}>".format(bot_user_id) in event_text_blocks or "$jira --query" in event_text_blocks):
-
-                if "$jira --query" in event_text_blocks:
-                    print(f"USER INVOKED JIRA, FETCHING ISSUES.")
-                    issues = get_issues_assigned_to_current_user(payload=event_text_blocks)
-                    Thread(target=client.chat_postMessage, kwargs={
-                        "channel": channel_id,
-                        "blocks": issues['blocks'],
-                        "text": "Here are your current issues in JIRA:",
-                        "thread_ts": event.get('thread_ts', event.get('ts'))
-                    }).start()
-
-                else:
+        
+            else:
+                if (event.get('type') == 'app_mention') or ("@bot" in event_text_blocks):
                     print(f"USER INVOKED BOT, REPLYING TO USER VIA CHATGPT.")
                     Thread(target=process_activity, args=(event, VERBOSE_MODE)).start()  
-        
-        print("SENDING SLACK AN HTTP200 SO WE CAN CONTINUE PROCESSING...")
-        return make_response("", 200)
 
+                elif "$memory" in event_text_blocks:
+                    Thread(target=process_activity, args=(event, VERBOSE_MODE)).start()  
+
+                elif "$dalle" in event_text_blocks:
+                    print(f"USER INVOKED DALLE, CREATING IMAGE.")
+                    dalle_command = event_text_blocks.replace("$dalle", "").strip()
+                    n_images, prompt = parse_dalle_command(dalle_command)
+                    Thread(target=generate_image, args=(event, channel_id, prompt, n_images, VERBOSE_MODE)).start()
+
+                # Check if bot is directly mentioned or user uses the $jira --query command
+                #or
+                if (event.get('type') == 'app_mention' or "<@{}>".format(bot_user_id) in event_text_blocks or "$jira --query" in event_text_blocks):
+
+                    if "$jira --query" in event_text_blocks:
+                        print(f"USER INVOKED JIRA, FETCHING ISSUES.")
+                        issues = get_issues_assigned_to_current_user(payload=event_text_blocks)
+                        Thread(target=client.chat_postMessage, kwargs={
+                            "channel": channel_id,
+                            "blocks": issues['blocks'],
+                            "text": "Here are your current issues in JIRA:",
+                            "thread_ts": event.get('thread_ts', event.get('ts'))
+                        }).start()
+
+                    else:
+                        print(f"USER INVOKED BOT, REPLYING TO USER VIA CHATGPT.")
+                        Thread(target=process_activity, args=(event, VERBOSE_MODE)).start()  
+            
+            print("SENDING SLACK AN HTTP200 SO WE CAN CONTINUE PROCESSING...")
+            return make_response("", 200)
+    else:
+        print(f'Unhandled event type: {event_type}')
+        return make_response("Unhandled event or message type", 400)
 
 if __name__ == "__main__":
     app.run(port=int(os.getenv('PORT', 3000)))
