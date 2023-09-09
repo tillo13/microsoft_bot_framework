@@ -63,6 +63,8 @@ def process_activity(event, verbose_mode):
     else:
         total_tokens = 0
 
+    #lets see what we are sending
+    print(f"message_activity.bot_responses in chatgpt_utils.py: {message_activity.bot_responses}")
     send_message(
         event["channel"], 
         event["ts"], 

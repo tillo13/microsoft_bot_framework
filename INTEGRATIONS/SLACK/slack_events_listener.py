@@ -75,13 +75,16 @@ def slack_events():
             user_prompts = user_prompt_papertrail(thread_history)
 
             # Post the user prompts papertrail to Slack
-            client.chat_postMessage(channel=channel_id, thread_ts=thread_ts, text=f"User Prompts Papertrail:\n{user_prompts}")
+            #client.chat_postMessage(channel=channel_id, thread_ts=thread_ts, text=f"User Prompts Papertrail:\n{user_prompts}")
 
             Thread(target=process_activity, args=(event, VERBOSE_MODE)).start()  
         
         else:
             if (event.get('type') == 'app_mention') or ("@bot" in event_text_blocks):
                 print(f"USER INVOKED BOT, REPLYING TO USER VIA CHATGPT.")
+                Thread(target=process_activity, args=(event, VERBOSE_MODE)).start()  
+
+            elif "$memory" in event_text_blocks:
                 Thread(target=process_activity, args=(event, VERBOSE_MODE)).start()  
 
             elif "$dalle" in event_text_blocks:
