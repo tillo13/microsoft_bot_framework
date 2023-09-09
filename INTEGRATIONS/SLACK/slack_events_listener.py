@@ -62,6 +62,16 @@ def slack_events():
             return make_response("Ignore bot message", 200)
         event_text_blocks = message_from_blocks(event).lower()
 
+        # If the event is a message, react with the hourglass emoji  
+        if event.get('type') == 'message':
+            timestamp = event.get('ts')
+            # Send a reaction (this needs the reactions:write permission scope)
+            client.reactions_add(
+                name='hourglass',
+                channel=channel_id,
+                timestamp=timestamp
+            )
+
         # Test the event_text_block:
         print(f"Event text blocks: {event_text_blocks}")
 
