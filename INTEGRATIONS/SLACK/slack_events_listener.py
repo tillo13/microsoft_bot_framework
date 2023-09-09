@@ -87,6 +87,9 @@ def slack_events():
             elif "$memory" in event_text_blocks:
                 Thread(target=process_activity, args=(event, VERBOSE_MODE)).start()  
 
+            elif "$history" in event_text_blocks:
+                client.chat_postMessage(channel=channel_id, thread_ts=thread_ts, text=f"User Prompts Papertrail:\n{user_prompts}")
+
             elif "$dalle" in event_text_blocks:
                 print(f"USER INVOKED DALLE, CREATING IMAGE.")
                 dalle_command = event_text_blocks.replace("$dalle", "").strip()
