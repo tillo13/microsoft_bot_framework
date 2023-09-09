@@ -94,6 +94,7 @@ def slack_events():
                 Thread(target=generate_image, args=(event, channel_id, prompt, n_images, VERBOSE_MODE)).start()
 
             # Check if bot is directly mentioned or user uses the $jira --query command
+            #or
             if (event.get('type') == 'app_mention' or "<@{}>".format(bot_user_id) in event_text_blocks or "$jira --query" in event_text_blocks):
 
                 if "$jira --query" in event_text_blocks:
