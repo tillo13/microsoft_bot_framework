@@ -12,6 +12,9 @@ from datetime import datetime
 from dalle_utils import generate_image, parse_dalle_command
 from chatgpt_utils import get_thread_starter_user_id, process_activity 
 
+from jira_utils import get_issues_assigned_to_current_user
+
+
 # load environment variables from .env file
 load_dotenv('../../.env')
 
@@ -43,6 +46,7 @@ def message_from_blocks(event):
 @app.route('/slack/events', methods=['POST'])
 def slack_events():
     data = request.get_json()
+    bot_mention = f"<@{bot_user_id}>"
     if "challenge" in data:
         return make_response(data["challenge"], 200, {"content_type": "application/json"})
     if "event" in data:
@@ -74,8 +78,22 @@ def slack_events():
                 n_images, prompt = parse_dalle_command(dalle_command)
                 Thread(target=generate_image, args=(event, channel_id, prompt, n_images, VERBOSE_MODE)).start()
 
-            else:
-                print("USER USED SLACK, BUT DID NOT CALL BOT.")
+            # Check if bot is directly mentioned or user uses the $jira --query command
+            if (event.get('type') == 'app_mention' or "<@{}>".format(bot_user_id) in event_text_blocks or "$jira --query" in event_text_blocks):
+
+                if "$jira --query" in event_text_blocks:
+                    print(f"USER INVOKED JIRA, FETCHING ISSUES.")
+                    issues = get_issues_assigned_to_current_user(payload=event_text_blocks)
+                    Thread(target=client.chat_postMessage, kwargs={
+                        "channel": channel_id,
+                        "blocks": issues['blocks'],
+                        "text": "Here are your current issues in JIRA:",
+                        "thread_ts": event.get('thread_ts', event.get('ts'))
+                    }).start()
+
+                else:
+                    print(f"USER INVOKED BOT, REPLYING TO USER VIA CHATGPT.")
+                    Thread(target=process_activity, args=(event, VERBOSE_MODE)).start()  # pass VERBOSE_MODE here
         
         print("SENDING SLACK AN HTTP200 SO WE CAN CONTINUE PROCESSING...")
         return make_response("", 200)
