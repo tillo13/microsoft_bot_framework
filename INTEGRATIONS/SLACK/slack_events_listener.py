@@ -54,7 +54,7 @@ def slack_events():
         return make_response(data["challenge"], 200, {"content_type": "application/json"})
     if "event" in data:
         event = data["event"]
-        # Retrieve channel_id from the event data:
+        # Retrieve the channel_id from the event data:
         channel_id = event['channel']
 
         # Ignore bot's own messages
@@ -62,23 +62,28 @@ def slack_events():
             return make_response("Ignore bot message", 200)
         event_text_blocks = message_from_blocks(event).lower()
 
-        #test the event_text_block: 
+        # Test the event_text_block:
         print(f"Event text blocks: {event_text_blocks}")
 
         thread_ts = event.get('thread_ts')
-        if thread_ts and event['user'] != bot_user_id:
-            print(f"THREADED CHATGPT MESSAGE, INVOKING {bot_user_id} BOT.")
-                # Fetch the thread history
-            thread_history = client.conversations_replies(channel=channel_id, ts=str(thread_ts), limit=100)['messages']
+
+        if "$history" in event_text_blocks:
+            # Fetch the thread history
+            thread_history = client.conversations_replies(
+                channel=channel_id, ts=str(thread_ts), limit=100)['messages']
 
             # Get the user prompts papertrail
             user_prompts = user_prompt_papertrail(thread_history)
 
             # Post the user prompts papertrail to Slack
-            #client.chat_postMessage(channel=channel_id, thread_ts=thread_ts, text=f"User Prompts Papertrail:\n{user_prompts}")
-
+            client.chat_postMessage(
+                channel=channel_id, thread_ts=thread_ts, text=f"User Prompts Papertrail:\n{user_prompts}")
+            print("SENDING SLACK AN HTTP200 AFTER POSTING PAPERTRAIL...")
+            return make_response("", 200)
+        elif thread_ts and event['user'] != bot_user_id:
+            print(f"THREADED CHATGPT MESSAGE, INVOKING {bot_user_id} BOT.")
             Thread(target=process_activity, args=(event, VERBOSE_MODE)).start()  
-        
+       
         else:
             if (event.get('type') == 'app_mention') or ("@bot" in event_text_blocks):
                 print(f"USER INVOKED BOT, REPLYING TO USER VIA CHATGPT.")
@@ -86,9 +91,6 @@ def slack_events():
 
             elif "$memory" in event_text_blocks:
                 Thread(target=process_activity, args=(event, VERBOSE_MODE)).start()  
-
-            elif "$history" in event_text_blocks:
-                client.chat_postMessage(channel=channel_id, thread_ts=thread_ts, text=f"User Prompts Papertrail:\n{user_prompts}")
 
             elif "$dalle" in event_text_blocks:
                 print(f"USER INVOKED DALLE, CREATING IMAGE.")
