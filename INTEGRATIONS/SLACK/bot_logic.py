@@ -11,6 +11,14 @@ class Bot:
     def __init__(self, client):
         self.client = client
 
+# Place the function here, after class declaration, but within the class
+    @staticmethod
+    def clean_openai_json(payload):
+        for item in payload["messages"]:
+            if item["role"] == "assistant" and "as an ai" in item["content"].lower():
+                item["content"] = "Let me look at the previous conversations"
+        return payload
+
     def on_turn(self, context: TurnContext):
         message_content, details, entire_json_payload, usage = self.talk_to_chatbot(context.activity)  # add usage here
         context.activity.text = message_content
@@ -50,24 +58,62 @@ class Bot:
                 initial_message = [{'role': 'user', 'content': activity.text}]
 
             data = { "messages": initial_message }
+            data = self.clean_openai_json(data)
 
             url = f'{os.getenv("OPENAI_API_BASE_URL")}/{os.getenv("OPENAI_API_DEPLOYMENT")}?api-version={os.getenv("OPENAI_API_VERSION")}'
 
+            #attempt to get right answer if bot does not know.
+            RETRY_ATTEMPTS = 5  # Set retry attempts
+            retry_counter = 0
+            retry_message = "Trying to remember, one moment..."
+            thread_ts = activity.timestamp  # Get the thread_ts from activity
+
+            while retry_counter < RETRY_ATTEMPTS:
+                response = requests.post(url, headers=headers, json=data)
+                if response.status_code == 200:
+                    result = response.json()
+                    if "access to personal information" in result['choices'][0]['message']['content'].lower():
+                        retry_counter += 1
+                        thread_ts_str = str(thread_ts)
+                        self.client.chat_postMessage(channel=channel_id, thread_ts=thread_ts_str, text=retry_message)
+                        # Shift model's focus back in the thread
+                        data['messages'] = data['messages'][:-retry_counter]
+                        continue
+                    else:
+                        break  # Response doesn't have the 'access to personal information' phrase. Break out of the loop.
+                else:
+                    break  # If failed to get a successful response, break out if the loop
+
+            if retry_counter == RETRY_ATTEMPTS:
+                result = {"choices": [{"message": {"content": "I'm sorry, but I'm unable to recall the answer. Could you please ask again?"}}]}
+                message_content = result['choices'][0]['message']['content']
+                details = "Exhausted retries and still did not find the relevant answer in the user conversation history."
+                entire_json_payload = "Not applicable in this case."
+                usage = {}  # Since there's no usage data when retries are exhausted
+
+
+            # If retries exhausted, add the bot's last response to the payload and set assistant content
+            if retry_counter == RETRY_ATTEMPTS:
+                data['messages'].append({"role": "assistant","content": "I'm sorry, but I'm unable to recall the answer. Could you please ask again?"})
+
             #tell the terminal 
-            print("OPENAI PAYLOAD BEFORE SENDING:" + json.dumps(data, indent=2))
+            print("OPENAI PAYLOAD BEFORE SENDING:" + json.dumps(data, indent=2))   
+
             response = requests.post(url, headers=headers, json=data)
 
             if response.status_code == 200:
                 result = response.json()
-                print(result)  # print to see the structure
-                
+                #print(result)  # print to see the structure
+                            
                 # Print the total token usage from the response
                 total_tokens = result.get('usage', {}).get('total_tokens')                
                 print(f'Total token usage in bot_logic.py: {total_tokens}')
 
                 message_content = result['choices'][0]['message']['content']
+                if "as an ai language model" in message_content.lower() or "access to personal information" in message_content.lower():
+                    message_content = "Can you rephrase that?"
                 details = "OpenAI response details:"
-                
+                            
                 for k, v in result.items():
                     if k != 'choices':
                         if isinstance(v, dict):
@@ -79,7 +125,5 @@ class Bot:
                 entire_json_payload = f"Entire current JSON payload:{json.dumps(result, indent=2)}"  
 
                 return message_content, details, entire_json_payload, result['usage']
-
-
             else:
-                return {"message_content": 'An error occurred while communicating with the bot.', "details": '', "entire_json_payload": '', 'usage': {}} 
+                return {"message_content": 'An error occurred while communicating with the bot.', "details": '', "entire_json_payload": '', 'usage': {}}

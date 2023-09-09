@@ -1,6 +1,15 @@
 import json
 import logging
 
+def user_prompt_papertrail(data):
+    user_prompts = ''
+    for message in data:
+        if 'bot_id' not in message:
+            ts = message.get('ts')
+            content = message.get('text', '')
+            user_prompts += f"{ts}: {content}\n"
+    return user_prompts
+
 def slack_to_chatgpt_parser(data):
 
     fallback_gpt3_message = [

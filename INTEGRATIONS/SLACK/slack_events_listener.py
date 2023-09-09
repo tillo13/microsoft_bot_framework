@@ -14,6 +14,9 @@ from chatgpt_utils import get_thread_starter_user_id, process_activity
 
 from jira_utils import get_issues_assigned_to_current_user
 
+from UTILITIES.slack_to_chatgpt_payload_parser import user_prompt_papertrail
+
+
 
 # load environment variables from .env file
 load_dotenv('../../.env')
@@ -65,12 +68,21 @@ def slack_events():
         thread_ts = event.get('thread_ts')
         if thread_ts and event['user'] != bot_user_id:
             print(f"THREADED CHATGPT MESSAGE, INVOKING {bot_user_id} BOT.")
-            Thread(target=process_activity, args=(event, VERBOSE_MODE)).start()   # pass VERBOSE_MODE here
+                # Fetch the thread history
+            thread_history = client.conversations_replies(channel=channel_id, ts=str(thread_ts), limit=100)['messages']
+
+            # Get the user prompts papertrail
+            user_prompts = user_prompt_papertrail(thread_history)
+
+            # Post the user prompts papertrail to Slack
+            client.chat_postMessage(channel=channel_id, thread_ts=thread_ts, text=f"User Prompts Papertrail:\n{user_prompts}")
+
+            Thread(target=process_activity, args=(event, VERBOSE_MODE)).start()  
         
         else:
             if (event.get('type') == 'app_mention') or ("@bot" in event_text_blocks):
                 print(f"USER INVOKED BOT, REPLYING TO USER VIA CHATGPT.")
-                Thread(target=process_activity, args=(event, VERBOSE_MODE)).start()  # pass VERBOSE_MODE here
+                Thread(target=process_activity, args=(event, VERBOSE_MODE)).start()  
 
             elif "$dalle" in event_text_blocks:
                 print(f"USER INVOKED DALLE, CREATING IMAGE.")
@@ -93,10 +105,11 @@ def slack_events():
 
                 else:
                     print(f"USER INVOKED BOT, REPLYING TO USER VIA CHATGPT.")
-                    Thread(target=process_activity, args=(event, VERBOSE_MODE)).start()  # pass VERBOSE_MODE here
+                    Thread(target=process_activity, args=(event, VERBOSE_MODE)).start()  
         
         print("SENDING SLACK AN HTTP200 SO WE CAN CONTINUE PROCESSING...")
         return make_response("", 200)
+
 
 if __name__ == "__main__":
     app.run(port=int(os.getenv('PORT', 3000)))
