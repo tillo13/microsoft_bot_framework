@@ -5,7 +5,7 @@ import json
 import os
 from datetime import timezone
 import datetime
-from UTILITIES.slack_to_chatgpt_payload_parser import slack_to_chatgpt_parser
+from UTILITIES.slack_to_chatgpt_payload_parser import slack_to_chatgpt_parser,user_prompt_papertrail
 
 class Bot:
     def __init__(self, client):
@@ -72,12 +72,14 @@ class Bot:
                 response = requests.post(url, headers=headers, json=data)
                 if response.status_code == 200:
                     result = response.json()
-                    if "access to personal information" in result['choices'][0]['message']['content'].lower():
+                    if "access to personal information" in result['choices'][0]['message']['content'].lower() or "as an ai language model" in result['choices'][0]['message']['content'].lower():
                         retry_counter += 1
                         thread_ts_str = str(thread_ts)
-                        self.client.chat_postMessage(channel=channel_id, thread_ts=thread_ts_str, text=retry_message)
-                        # Shift model's focus back in the thread
-                        data['messages'] = data['messages'][:-retry_counter]
+                        self.client.chat_postMessage(channel=channel_id, thread_ts=thread_ts_str, text="One moment while I dig into our convo a bit more...")
+                        thread_history = self.client.conversations_replies(channel=channel_id, ts=str(thread_ts), limit=100)['messages']
+                        user_prompts = user_prompt_papertrail(thread_history)
+                        data['messages'].append({"role": "assistant", "content": "It appears I am not recalling the entire conversation. Can you reply with everything you've said to this point?"}) # this is a dummy content, you may improve it
+                        data['messages'].append({"role": "user", "content": user_prompts})
                         continue
                     else:
                         break  # Response doesn't have the 'access to personal information' phrase. Break out of the loop.
