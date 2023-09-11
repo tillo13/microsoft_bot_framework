@@ -84,3 +84,17 @@ def mark_message_processed(channel, timestamp):
         )
     except SlackApiError as e:
         print(f"Failed to add {check_mark} emoji: {e.response['error']}")
+
+bot_user_id = client.auth_test()["user_id"]
+bot_initiated_threads = []
+
+def get_thread_starter_user_id(channel, thread_ts):
+    response = client.conversations_replies(channel=channel, ts=thread_ts)
+    starter_message = response['messages'][0]
+
+    starter_user_id = starter_message['user']
+
+    if starter_user_id == bot_user_id and thread_ts not in bot_initiated_threads:
+        bot_initiated_threads.append(thread_ts)
+        
+    return starter_user_id
