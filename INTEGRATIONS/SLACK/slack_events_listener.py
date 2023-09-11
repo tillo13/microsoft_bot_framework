@@ -16,6 +16,11 @@ from jira_utils import get_issues_assigned_to_current_user
 
 from UTILITIES.slack_to_chatgpt_payload_parser import user_prompt_papertrail
 
+import chat_with_itself
+
+# default number of conversation rounds
+GLOBAL_CONVO_ROUNDS = 2
+GLOBAL_STARTER_MESSAGE ="Please tell me a very short story about Seattle in 5 sentences or less."
 
 
 # load environment variables from .env file
@@ -82,7 +87,6 @@ def slack_events():
                     client.reactions_add(name='hourglass', channel=channel_id, timestamp=timestamp)
                 except SlackApiError as e:
                     print(f"Got an error: {e.response['error']}")
-                
 
             # Test the event_text_block:
             print(f"Event text blocks: {event_text_blocks}")
@@ -120,6 +124,23 @@ def slack_events():
                     n_images, prompt = parse_dalle_command(dalle_command)
                     Thread(target=generate_image, args=(event, channel_id, prompt, n_images, VERBOSE_MODE)).start()
 
+                elif "$chatwithitself" in event_text_blocks:
+                    print(f"USER INVOKED CHATWITHITSELF, STARTING CONVERSATION.")
+                    convo_rounds = GLOBAL_CONVO_ROUNDS  # default number of rounds
+
+                    # Check if the command contains "--" followed by a number
+                    if "--" in event_text_blocks:
+                        try:
+                            # Extract the number from the string and convert to int
+                            convo_rounds = int(event_text_blocks.split("--")[1].strip())
+                        except ValueError:
+                            # If extraction/conversion fails, convo_rounds stays as the default
+                            pass
+
+                    thread_ts = event.get('thread_ts', event.get('ts'))
+                    Thread(target=chat_with_itself.chat_with_itself,
+                        args=(client, channel_id, bot_user_id, thread_ts, GLOBAL_STARTER_MESSAGE, convo_rounds)).start()
+
                 # Check if bot is directly mentioned or user uses the $jira --query command
                 #or
                 if (event.get('type') == 'app_mention' or "<@{}>".format(bot_user_id) in event_text_blocks or "$jira --query" in event_text_blocks):
@@ -133,7 +154,6 @@ def slack_events():
                             "text": "Here are your current issues in JIRA:",
                             "thread_ts": event.get('thread_ts', event.get('ts'))
                         }).start()
-
                     else:
                         print(f"USER INVOKED BOT, REPLYING TO USER VIA CHATGPT.")
                         Thread(target=process_activity, args=(event, VERBOSE_MODE)).start()  
@@ -146,3 +166,5 @@ def slack_events():
 
 if __name__ == "__main__":
     app.run(port=int(os.getenv('PORT', 3000)))
+
+
