@@ -15,7 +15,7 @@ slack_token = os.getenv('SLACK_BOT_TOKEN')
 client = WebClient(token=slack_token)
 bot_adapter = Adapter(Bot(client))
 
-# loading environment variables from .env file
+# loading environment variables from .env file.
 load_dotenv('../../.env')
 
 def process_activity(event, verbose_mode):  

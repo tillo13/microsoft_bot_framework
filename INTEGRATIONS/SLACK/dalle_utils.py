@@ -167,8 +167,9 @@ def generate_image(event, channel_id, prompt, n_images, VERBOSE_MODE):
             minutes, _ = divmod(remainder, 60)
 
             sas_details = f'Filename: {filename}\n'  
-            sas_details += f"Azure accessible until: {expires_at}.\n"
-            sas_details += f"Therefore, expires in about {int(hours)} hours and {int(minutes)} minutes)\n"
+            sas_details += f'Full-sized Azure version accessible until: {expires_at}.\n'
+            sas_details += f'Therefore, expires in about {int(hours)} hours and {int(minutes)} minutes)\n'
+            sas_details += f'Azure image URL: `{image_url}`\n'
             #sas_details += f"Allowed Protocols: {sas_token.get('spr')}\n"  # https
             #sas_details += f"Resource type: {sas_token.get('sr')} (b = blob)\n"  # b means blob type
             #sas_details += f"Storage Services Version (sv): {sas_token.get('sv')}\n"
@@ -248,6 +249,7 @@ def generate_image(event, channel_id, prompt, n_images, VERBOSE_MODE):
                             
                             image_num = index + 1  # We add 1 because `index` starts from 0
                             # Now send the image details block message after successful upload
+                            trimmed_image_url = image_url.replace('https://', '')
                             block_message = [
                                 {
                                     "type": "context",
@@ -257,8 +259,9 @@ def generate_image(event, channel_id, prompt, n_images, VERBOSE_MODE):
                                             "text": (f":information_source: *This is image:* _{image_num}_ *of* _{n_images}_.\n"        
                                                     f":robot_face: Your prompt was: `$dalle {prompt}`\n" 
                                                     f"*Filename:* `{filename}`\n"
-                                                    f"*Azure accessible until:* `{expires_at}`\n"
-                                                    f"*Expires in:* `{int(hours)} hours and {int(minutes)} minutes`\n"
+                                                    f"*Full-sized Azure URL:* `{trimmed_image_url}`\n"
+                                                    f"*Azure version accessible until:* `{expires_at}`\n"
+                                                    f"*Azure version Expires in:* `{int(hours)} hours and {int(minutes)} minutes`\n"
                                                     f"*Original file size:* `{format(original_size_in_MB, '.2f')} MB`\n"
                                                     f"*Final file size:* `{format(final_size_in_MB, '.2f')} MB`\n" 
                                                     f"*Size reduction:* `{format(size_reduction, '.2f')} MB` - `{format(size_reduction_percent, '.2f')}%`\n"
@@ -266,9 +269,7 @@ def generate_image(event, channel_id, prompt, n_images, VERBOSE_MODE):
                                         }
                                     ]
                                 },
-                                {
-                                    "type": "divider"
-                                }
+                                {"type": "divider"}
                             ]
 
                             client.chat_postMessage(
